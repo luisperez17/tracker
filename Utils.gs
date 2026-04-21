@@ -1,0 +1,83 @@
+// ============================================================
+// MTM TRACKER — UTILIDADES Y AYUDANTES
+// ============================================================
+
+/**
+ * Limpia el HTML de una cadena, removiendo tags y convirtiendo entidades.
+ */
+function clean(html) {
+    if (!html) return "";
+    return html.replace(/<[^>]+>/g, "")
+        .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+        .replace(/&nbsp;/g, " ").replace(/&#39;/g, "'").replace(/&quot;/g, '"')
+        .trim();
+}
+
+/**
+ * Colorea un porcentaje en una celda según los umbrales t1 y t2.
+ */
+function colorPct(cell, val, t1, t2) {
+    if (!val) return;
+    var n = parseFloat(String(val).replace("%", "").replace("+", "")) || 0;
+    cell.setFontWeight("bold");
+    if (n >= t1) cell.setFontColor(C.GREEN);
+    else if (n >= t2) cell.setFontColor("#4CAF50");
+    else if (n >= -t2) cell.setFontColor(C.ORANGE);
+    else cell.setFontColor(C.RED);
+}
+
+/**
+ * Determina si la fecha dada está en horario de verano (DST).
+ */
+function esDST(date) {
+    var jan = new Date(date.getFullYear(), 0, 1).getTimezoneOffset();
+    var jul = new Date(date.getFullYear(), 6, 1).getTimezoneOffset();
+    return date.getTimezoneOffset() < Math.max(jan, jul);
+}
+
+/**
+ * Obtiene el precio actual de un ticker desde Yahoo Finance.
+ */
+function fetchPrecioYahoo(ticker) {
+    try {
+        var url = "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker + "?interval=1m&range=1d";
+        var r = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+        if (r.getResponseCode() !== 200) return null;
+        var json = JSON.parse(r.getContentText());
+        return json.chart.result[0].meta.regularMarketPrice || null;
+    } catch (e) { return null; }
+}
+
+/**
+ * Verifica si ya se registró el precio para una hora específica hoy.
+ */
+function yaRegistradoHoy(horaET) {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var log = ss.getSheetByName(PRICE_LOG);
+    if (!log || log.getLastRow() < 3) return false;
+    var todayStr = new Date().toLocaleDateString("es");
+    var data = log.getRange(3, 1, log.getLastRow() - 2, 3).getValues();
+    for (var i = 0; i < data.length; i++) {
+        if (new Date(data[i][0]).toLocaleDateString("es") === todayStr && Number(data[i][2]) === horaET) return true;
+    }
+    return false;
+}
+
+/**
+ * Actualiza los timestamps de un filtro en el Dashboard.
+ */
+function actualizarTimestampsDashboardFiltro(filtro, count) {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var dash = ss.getSheetByName("📊 Dashboard");
+    if (!dash) return;
+    
+    var lastRow = dash.getLastRow();
+    var data = dash.getRange(1, 2, lastRow, 1).getValues();
+    for (var d = 0; d < data.length; d++) {
+        if (String(data[d][0]).trim() === filtro.nombre) {
+            dash.getRange(d + 1, 3).setValue(count);
+            dash.getRange(d + 1, 4).setValue(new Date()).setNumberFormat("dd/mm/yyyy hh:mm");
+            break;
+        }
+    }
+}
