@@ -106,6 +106,11 @@ var FILTROS = [
     },
 ];
 
+// CONFIGURACIÓN DE ALERTAS WHATSAPP (CallMeBot)
+var WS_PHONE = "573124873708"; 
+var WS_API_KEY = "1386524"; 
+
+// VARIABLES GLOBALES (No tocar si no sabes qué haces)
 /** @constant {Object} Puntuación ponderada por tier de señal */
 var TIER_SCORES = {
     "post_earnings": { tier: 1, pts: 3, label: "Post Earnings Breakout", razon: "Catalizador concreto hoy + volumen extremo" },

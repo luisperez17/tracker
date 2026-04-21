@@ -528,3 +528,50 @@ function reconfigurarSoloOperaciones() {
         }
     }
 }
+/**
+ * Formatea la hoja de Reporte de Viernes con un diseño profesional.
+ * @param {Sheet} ws - La hoja de reporte.
+ */
+function formatearHojaReporte(ws) {
+    ws.clear();
+    ws.clearContents();
+    ws.clearFormats();
+    
+    ws.setColumnWidth(1, 40);  // Rank
+    ws.setColumnWidth(2, 80);  // Ticker
+    ws.setColumnWidth(3, 160); // Empresa
+    ws.setColumnWidth(4, 110); // Filtros
+    ws.setColumnWidth(5, 70);  // Score
+    ws.setColumnWidth(6, 90);  // Entrada
+    ws.setColumnWidth(7, 90);  // Viernes
+    ws.setColumnWidth(8, 80);  // P&L %
+    ws.setColumnWidth(9, 140); // Estatus
+    ws.setColumnWidth(10, 180); // Tendencia / Nota
+
+    // --- ENCABEZADO ---
+    ws.getRange(1, 1, 1, 10).merge().setValue("📊 REPORTE DE RENDIMIENTO SEMANAL")
+        .setBackground(C.DARK).setFontColor(C.GREEN).setFontSize(16)
+        .setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle");
+    ws.setRowHeight(1, 44);
+
+    ws.getRange(2, 1, 1, 10).merge().setValue("Análisis de cierre de semana — Generado el " + new Date().toLocaleString())
+        .setBackground(C.ACCENT).setFontColor(C.WHITE).setFontSize(9).setHorizontalAlignment("center");
+    
+    // --- DASHBOARD DE RESUMEN ---
+    ws.getRange(4, 2).setValue("Operaciones").setFontWeight("bold");
+    ws.getRange(4, 3).setValue("Win Rate").setFontWeight("bold");
+    ws.getRange(4, 4).setValue("P&L Promedio").setFontWeight("bold");
+    ws.getRange(4, 5).setValue("Mejor Ticker").setFontWeight("bold");
+
+    ws.getRange(5, 2, 1, 4).setBackground(C.LIGHT).setHorizontalAlignment("center").setFontSize(11).setFontWeight("bold");
+
+    // --- ENCABEZADOS DE TABLA ---
+    var headers = ["#", "Ticker", "Empresa", "Filtros", "Score", "Entrada", "Cierre Vie", "P&L %", "Estatus", "Tendencia"];
+    for (var i = 0; i < headers.length; i++) {
+        ws.getRange(7, i + 1).setValue(headers[i])
+            .setBackground(C.DARK).setFontColor(C.WHITE).setFontWeight("bold")
+            .setHorizontalAlignment("center").setVerticalAlignment("middle");
+    }
+    ws.setRowHeight(7, 30);
+    ws.setFrozenRows(7);
+}

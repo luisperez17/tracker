@@ -7,8 +7,8 @@
  * Crea el menú personalizado en la interfaz.
  */
 function onOpen() {
-    SpreadsheetApp.getUi()
-        .createMenu("📊 MTM Tracker")
+    var ui = SpreadsheetApp.getUi();
+    ui.createMenu("📊 MTM Tracker")
         .addItem("🔄 Actualizar TODO", "actualizarTodo")
         .addSeparator()
         .addItem("① YTD Top + Volumen", "act_ytd")
@@ -23,23 +23,23 @@ function onOpen() {
         .addItem("⑩ Ganadores Sem +20%", "act_ganadores")
         .addItem("⑪ Volumen Climático", "act_volumen")
         .addSeparator()
-        .addItem("🏆 Consolidar Top Candidatos", "verTopCandidatos")
-        .addItem("🛠️  Configurar hojas (primera vez)", "configurarHojas")
-        .addItem("🔧 Reconfigurar solo Operaciones", "reconfigurarSoloOperaciones")
+        .addItem("🚀 Enviar Resumen WhatsApp Ahora", "enviarResumenManual")
+        .addItem("📱 Validar conexión WhatsApp", "testWhatsApp")
         .addSeparator()
-        .addItem("🎯 Configurar Semana Tracker", "configurarSemanaTracker")
-        .addItem("🧹 Limpiar decimales (Semana Tracker)", "sanitizarDecimalesSemana")
-        .addItem("🧹 Limpiar decimales (Operaciones)", "sanitizarDecimalesOperaciones")
+        .addItem("⚙️ Instalar triggers PUNTUALES", "instalarTriggers")
+        .addItem("🔴 Desinstalar triggers", "desinstalarTriggers")
+        .addItem("🕒 Sincronizar próximo reporte", "programarSiguienteCheck")
+        .addSeparator()
         .addItem("🔍 Verificar semana", "verificarSemana")
         .addItem("📊 Registrar precios ahora (manual)", "registrarPreciosManual")
         .addItem("📋 Generar Reporte Viernes", "generarReporteViernes")
-        .addItem("🔄 Reset Semana (cada domingo)", "resetearSemana")
-        .addItem("⚙️ Instalar triggers automáticos", "instalarTriggers")
-        .addItem("🔴 Desinstalar triggers", "desinstalarTriggers")
         .addSeparator()
-        .addItem("🚦 Actualizar semáforo ahora", "actualizarSemaforoManual")
-        .addItem("⚙️ Instalar trigger diario", "instalarTriggerDiario")
-        .addItem("🔴 Desinstalar trigger diario", "desinstalarTriggerDiario")
+        .addItem("🧹 Limpiar decimales (Semana Tracker)", "sanitizarDecimalesSemana")
+        .addItem("🧹 Limpiar decimales (Operaciones)", "sanitizarDecimalesOperaciones")
+        .addSeparator()
+        .addItem("🏆 Consolidar Top Candidatos", "verTopCandidatos")
+        .addItem("🛠️ Configurar hojas (primera vez)", "configurarHojas")
+        .addItem("🔄 Reset Semana (cada domingo)", "resetearSemana")
         .addToUi();
 }
 
@@ -142,33 +142,92 @@ function onEdit(e) {
 // ============================================================
 
 /**
- * Instala el trigger para registrar precios cada hora.
+ * Instala el disparador de cadena (Chain-Trigger) para una precisión rigurosa.
+ * Borra cualquier rastro de disparadores anteriores.
  */
 function instalarTriggers() {
-    ScriptApp.getProjectTriggers().forEach(function (t) {
-        if (t.getHandlerFunction() === "registrarPreciosTrigger")
-            ScriptApp.deleteTrigger(t);
-    });
-    ScriptApp.newTrigger("registrarPreciosTrigger")
-        .timeBased().everyHours(1).create();
-    SpreadsheetApp.getActiveSpreadsheet().toast(
-        "Trigger instalado: verifica precios cada hora lun-vie.\n" +
-        "Actúa solo en: 10am, 11am, 1pm, 2:30pm, 3:45pm ET.",
-        "✅ Triggers instalados", 6
-    );
+    eliminarTriggersPrecios();
+    programarSiguienteCheck();
+    SpreadsheetApp.getActiveSpreadsheet().toast("Sistema de disparadores de cadena (Métrica Precisa) ACTIVADO.", "⚙️", 5);
 }
 
 /**
- * Desinstala el trigger de registro de precios.
+ * Desinstala todos los disparadores relacionados con precios.
  */
 function desinstalarTriggers() {
-    var n = 0;
-    ScriptApp.getProjectTriggers().forEach(function (t) {
+    eliminarTriggersPrecios();
+    SpreadsheetApp.getActiveSpreadsheet().toast("Disparadores DESACTIVADOS.", "🔴", 5);
+}
+
+/**
+ * Función que ejecuta el disparador automático.
+ * Registra precios, envía el reporte y agenda la siguiente ejecución.
+ */
+function registrarPreciosTrigger() {
+    try {
+        registrarPrecios(); // Ya incluye el WhatsApp Summary
+    } catch (e) {
+        Logger.log("Error en registrarPreciosTrigger: " + e.toString());
+    } finally {
+        programarSiguienteCheck(); // Siempre intentamos agendar el siguiente para no romper la cadena
+    }
+}
+
+/**
+ * Calcula la próxima hora de captura y genera un disparador exacto (atDate).
+ */
+function programarSiguienteCheck() {
+    eliminarTriggersPrecios(); // Evita duplicados
+    
+    var info = getInfoTiempoNY();
+    var now = info.fecha;
+    var hora = info.hora;
+    var diaSem = info.diaSemana; // 0=Dom, 1=Lun, ..., 5=Vie, 6=Sab
+    
+    // Horas de captura: 10, 11, 13, 14, 15
+    var slots = HORAS_CHECK; 
+    var nextSlot = null;
+    var nextDate = new Date(now.getTime());
+    nextDate.setMinutes(0, 0, 0);
+
+    // 1. Buscar si queda algún slot HOY
+    for (var i = 0; i < slots.length; i++) {
+        if (slots[i] > hora) {
+            nextSlot = slots[i];
+            break;
+        }
+    }
+
+    if (nextSlot !== null && diaSem >= 1 && diaSem <= 5) {
+        // Hay un slot hoy mismo
+        nextDate.setHours(nextSlot);
+    } else {
+        // No hay más slots hoy, o es fin de semana. Buscar el próximo día laboral a las 10 AM.
+        nextDate.setHours(slots[0]); // 10 AM
+        
+        do {
+            nextDate.setDate(nextDate.getDate() + 1);
+        } while (nextDate.getDay() === 0 || nextDate.getDay() === 6); // Saltar Sab y Dom
+    }
+
+    ScriptApp.newTrigger("registrarPreciosTrigger")
+        .timeBased()
+        .at(nextDate)
+        .create();
+        
+    Logger.log("Siguiente captura programada para: " + nextDate.toString());
+}
+
+/**
+ * Limpia todos los disparadores de registro de precios para evitar acumulación.
+ */
+function eliminarTriggersPrecios() {
+    var triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(function(t) {
         if (t.getHandlerFunction() === "registrarPreciosTrigger") {
-            ScriptApp.deleteTrigger(t); n++;
+            ScriptApp.deleteTrigger(t);
         }
     });
-    SpreadsheetApp.getActiveSpreadsheet().toast(n + " trigger(s) eliminados.", "🔴", 4);
 }
 
 /**

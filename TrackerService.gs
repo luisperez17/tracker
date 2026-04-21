@@ -76,8 +76,12 @@ function registrarPrecios(horaET, esManual) {
     for (var ti = 0; ti < activas.length; ti++) {
         var precio = fetchPrecioYahoo(activas[ti].ticker);
         if (precio !== null) {
+            activas[ti].precioActual = precio; // Guardamos para el reporte
             filas.push([now, activas[ti].ticker, horaET, checkNum, diaNomEfectivo, precio]);
             actualizarCeldaSemana(ws, activas[ti], diaNomEfectivo, checkNum, precio, esManual);
+        } else {
+            // Fallback para evitar error si Yahoo falla
+            activas[ti].precioActual = activas[ti].entrada; 
         }
         Utilities.sleep(600);
     }
@@ -90,6 +94,66 @@ function registrarPrecios(horaET, esManual) {
     }
 
     ss.toast("Precios registrados para " + activas.length + " tickers.", "📊 Precios", 5);
+
+    // NUEVO: Enviar resumen por WhatsApp automáticamente si está configurado
+    enviarResumenWhatsApp(activas);
+}
+
+function enviarResumenWhatsApp(activas) {
+    try {
+        if (!WS_PHONE || WS_PHONE.indexOf("...") >= 0 || !WS_API_KEY) {
+            SpreadsheetApp.getActive().toast("Falta configurar el teléfono o API Key de WhatsApp.", "⚠️", 5);
+            return;
+        }
+        if (!activas || activas.length === 0) {
+            SpreadsheetApp.getActive().toast("No hay acciones activas para reportar.", "⚠️", 3);
+            return;
+        }
+
+        var info = getInfoTiempoNY();
+        var h = info.hora;
+        var dia = info.diaSemanaStr; 
+        
+        var msg = "📊 *RESUMEN MTM — " + dia + " " + h + ":00 NY*\n\n";
+        msg += "```\n";
+        msg += "TKR    ENT    ACT    RET% \n";
+        msg += "────   ────   ────   ─────\n";
+
+        var counts = { target: 0, stop: 0, profit: 0, loss: 0 };
+
+        activas.forEach(function(cand) {
+            var tk = (cand.ticker + "    ").substring(0, 4);
+            var precio = Number(cand.precioActual) || 0;
+            var entrada = Number(cand.entrada) || 0;
+            var pnl = entrada > 0 ? ((precio - entrada) / entrada) : 0;
+            
+            var icon = "⚪";
+            if (cand.target > 0 && precio >= cand.target) { icon = "🎯"; counts.target++; }
+            else if (cand.stop > 0 && precio <= cand.stop) { icon = "🛑"; counts.stop++; }
+            else if (pnl > 0) { icon = "📈"; counts.profit++; }
+            else { icon = "📉"; counts.loss++; }
+
+            var pnlStr = (pnl * 100).toFixed(1);
+            if (pnl > 0) pnlStr = "+" + pnlStr;
+            
+            // Alineación manual de columnas para la "Grilla" (Monospace)
+            var colEnt = (entrada.toFixed(1) + "      ").substring(0, 6);
+            var colAct = (precio.toFixed(1) + "      ").substring(0, 6);
+            var colRet = (pnlStr + "%      ").substring(0, 7);
+            
+            msg += tk + "   " + colEnt + " " + colAct + " " + colRet + icon + "\n";
+        });
+        
+        msg += "```\n";
+        msg += "\n*Estatus*: " + counts.target + " 🎯 | " + counts.stop + " 🛑 | " + counts.profit + " 📈 | " + counts.loss + " 📉";
+        
+        enviarWhatsApp(msg);
+        SpreadsheetApp.getActive().toast("Reporte 'Grid' enviado a WhatsApp.", "📱", 3);
+        
+    } catch (e) {
+        Logger.log("Error en enviarResumenWhatsApp: " + e.toString());
+        SpreadsheetApp.getActive().toast("Error al enviar reporte: " + e.message, "❌", 6);
+    }
 }
 
 /**
@@ -134,23 +198,141 @@ function generarReporteViernes() {
     var log = ss.getSheetByName(PRICE_LOG);
 
     if (!ws || !log || log.getLastRow() < 3) {
-        ss.toast("Sin datos suficientes para el reporte.", "⚠️", 4);
+        ss.toast("Sin datos suficientes en el Price Log para generar el reporte.", "⚠️", 5);
         return;
     }
 
     var ranking = generarRankingParaHistorial();
-    if (!ranking) return;
+    if (!ranking || ranking.length === 0) {
+        ss.toast("No hay tickers activos con precios registrados para procesar.", "⚠️", 5);
+        return;
+    }
 
     var wsRep = ss.getSheetByName(REPORT_SHEET);
     if (!wsRep) wsRep = ss.insertSheet(REPORT_SHEET);
-    wsRep.clear(); wsRep.clearFormats();
+    formatearHojaReporte(wsRep);
 
-    // Lógica de llenado del reporte (similar a la original pero más limpia)
-    // [Aquí iría la lógica detallada de escritura del reporte]
-    // Por brevedad, asumo que las funciones de reporte están integradas o llamadas.
+    // --- CÁLCULO DE MÉTRICAS DE RESUMEN ---
+    var total = ranking.length;
+    var ganadoras = ranking.filter(function(r) { return r.pnlPct > 0; }).length;
+    var wr = total > 0 ? (ganadoras / total) : 0;
+    var pnlProm = ranking.reduce(function(a, b) { return a + b.pnlPct; }, 0) / total;
+    var mejor = ranking[0].ticker + " (" + (ranking[0].pnlPct * 100).toFixed(1) + "%)";
+
+    wsRep.getRange(5, 2).setValue(total);
+    wsRep.getRange(5, 3).setValue(wr).setNumberFormat("0%");
+    wsRep.getRange(5, 4).setValue(pnlProm).setNumberFormat("+0.00%;-0.00%");
+    wsRep.getRange(5, 5).setValue(mejor);
+
+    // --- LLENADO DE TABLA ---
+    var filas = [];
+    for (var i = 0; i < ranking.length; i++) {
+        var r = ranking[i];
+        var estatus = r.hitTarget ? "🎯 TARGET" : (r.hitStop ? "🛑 STOP" : "⏳ ACTIVO");
+        
+        filas.push([
+            i + 1,
+            r.ticker,
+            r.empresa,
+            r.filtrosStr,
+            r.scoreMTM,
+            r.entrada,
+            r.pVie,
+            r.pnlPct,
+            estatus,
+            r.tend
+        ]);
+    }
+
+    var dataRange = wsRep.getRange(8, 1, filas.length, 10);
+    dataRange.setValues(filas).setFontSize(9).setVerticalAlignment("middle").setHorizontalAlignment("center");
     
-    actualizarResumenSemana(ranking);
-    ss.toast("Reporte generado con éxito.", "✅", 5);
+    // Formatos condicionales y colores
+    for (var row = 0; row < filas.length; row++) {
+        var pnlCell = wsRep.getRange(8 + row, 8);
+        var estCell = wsRep.getRange(8 + row, 9);
+        var pVal = filas[row][7];
+        
+        pnlCell.setNumberFormat("+0.00%;-0.00%").setFontWeight("bold").setFontColor(pVal >= 0 ? C.GREEN : C.RED);
+        
+        var estVal = filas[row][8];
+        if (estVal === "🎯 TARGET") estCell.setBackground("#1B5E20").setFontColor("#FFFFFF").setFontWeight("bold");
+        if (estVal === "🛑 STOP") estCell.setBackground("#B71C1C").setFontColor("#FFFFFF").setFontWeight("bold");
+        
+        wsRep.setRowHeight(8 + row, 22);
+    }
+
+    wsRep.activate();
+    ss.toast("Reporte de rendimiento generado con éxito.", "✅", 5);
+}
+
+/**
+ * Escanea la semana y resalta acciones en riesgo o near target (Uso Miércoles).
+ */
+function verificarEstadoMiercoles() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ws = ss.getSheetByName(SEMANA_SHEET);
+    if (!ws || ws.getLastRow() < 6) return;
+
+    var data = ws.getRange(6, 1, MAX_CAND, 11).getValues();
+    var props = PropertiesService.getScriptProperties();
+    var hoy = new Date().toLocaleDateString();
+    var alertCount = 0;
+
+    for (var i = 0; i < data.length; i++) {
+        var tk = String(data[i][0]).trim();
+        if (!tk) continue;
+
+        var row = 6 + i;
+        var entrada = parseFloat(data[i][5]);
+        var stop = parseFloat(data[i][6]);
+        var target = parseFloat(data[i][7]);
+        if (!entrada) continue;
+
+        var precioActual = fetchPrecioYahoo(tk);
+        if (precioActual === null) continue;
+
+        var distStop = stop > 0 ? (precioActual - stop) / precioActual : 1;
+        var distTarget = target > 0 ? (target - precioActual) / precioActual : 1;
+
+        // Lógica de Alerta de Riesgo (Stop Loss)
+        if (distStop < 0.015 && distStop > -0.01) {
+            ws.getRange(row, 1, 1, 3).setBackground("#FFEBEE");
+            ws.getRange(row, 7).setBackground(C.RED).setFontColor("#FFFFFF");
+            
+            // Anti-spam: Solo enviar una vez al día por ticker
+            if (props.getProperty("alert_stop_" + tk) !== hoy) {
+                enviarWhatsApp("🛑 ALERTA MTM: " + tk + " está en riesgo. Precio: $" + precioActual.toFixed(2) + " (Cerca del Stop: $" + stop.toFixed(2) + ")");
+                props.setProperty("alert_stop_" + tk, hoy);
+            }
+            alertCount++;
+        } 
+        // Lógica de Alerta de Beneficio (Target)
+        else if (distTarget < 0.015 && distTarget > -0.01) {
+            ws.getRange(row, 1, 1, 3).setBackground("#E8F5E9");
+            ws.getRange(row, 8).setBackground(C.GREEN).setFontColor("#FFFFFF");
+            
+            if (props.getProperty("alert_target_" + tk) !== hoy) {
+                enviarWhatsApp("🎯 ALERTA MTM: " + tk + " cerca del TARGET. Precio: $" + precioActual.toFixed(2) + " (Objetivo: $" + target.toFixed(2) + ")");
+                props.setProperty("alert_target_" + tk, hoy);
+            }
+            alertCount++;
+        }
+    }
+
+    if (alertCount > 0) {
+        ss.toast(alertCount + " alertas detectadas y procesadas.", "⚠️ Gestión Riesgo", 6);
+    } else {
+        ss.toast("Sin alertas críticas. Todas las posiciones en zona segura.", "✅", 4);
+    }
+}
+
+/**
+ * Función de prueba para validar la conexión con WhatsApp.
+ */
+function testWhatsApp() {
+    enviarWhatsApp("🚀 MTM Tracker: Prueba de conexión exitosa. El sistema de alertas está activo.");
+    SpreadsheetApp.getActiveSpreadsheet().toast("Mensaje de prueba enviado. Revisa tu WhatsApp.", "📱", 4);
 }
 
 /**
@@ -299,4 +481,46 @@ function sanitizarDecimalesOperaciones() {
         }
     }
     ss.toast(corregidos + " valores corregidos en Operaciones.", "✅", 4);
+}
+/**
+ * Envía el resumen de WhatsApp manualmente con los datos actuales.
+ */
+function enviarResumenManual() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ws = ss.getSheetByName(SEMANA_SHEET);
+    if (!ws) return;
+    
+    var lastCol = ws.getLastColumn();
+    var data = ws.getRange(6, 1, MAX_CAND, lastCol).getValues();
+    var activas = [];
+    
+    for (var i = 0; i < data.length; i++) {
+        var tk = String(data[i][0]).trim();
+        var active = data[i][4]; // Col E (Active)
+        if (tk && active === true) {
+            // Buscamos el último precio registrado en las columnas de la derecha
+            var ultimoPrecio = 0;
+            // Columnas de precios empiezan en COL_PRECIOS_INI (col 14, index 13)
+            for (var c = COL_PRECIOS_INI - 1; c < data[i].length; c++) {
+               var val = limpiarValor(data[i][c]);
+               if (val !== null && val > 0) ultimoPrecio = val;
+            }
+            
+            var entrada = limpiarValor(data[i][5]) || 0;
+            activas.push({
+                ticker: tk,
+                entrada: entrada,
+                stop: limpiarValor(data[i][6]) || 0,
+                target: limpiarValor(data[i][7]) || 0,
+                precioActual: ultimoPrecio || entrada || 0 
+            });
+        }
+    }
+    
+    if (activas.length > 0) {
+        enviarResumenWhatsApp(activas);
+        ss.toast("Resumen enviado a WhatsApp.", "📱", 4);
+    } else {
+        ss.toast("No hay acciones activas para reportar.", "⚠️", 4);
+    }
 }

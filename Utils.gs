@@ -36,13 +36,32 @@ function esDST(date) {
 }
 
 /**
+ * Obtiene información detallada del tiempo actual en Nueva York (Eastern Time).
+ * Centraliza la lógica de DST y zonas horarias para todo el script.
+ */
+function getInfoTiempoNY() {
+    var now = new Date();
+    // Offset de ET respecto a UTC: -4 en DST, -5 en standard
+    var etOff = esDST(now) ? -4 : -5;
+    
+    // Calculamos la fecha técnica en NY
+    var nyTime = new Date(now.getTime() + (etOff * 3600000) + (now.getTimezoneOffset() * 60000));
+    
+    var dias = ["DOMINGO", "LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES", "SÁBADO"];
+    
+    return {
+        fecha: nyTime,
+        hora: nyTime.getHours(),
+        diaSemana: nyTime.getDay(),
+        diaSemanaStr: dias[nyTime.getDay()]
+    };
+}
+
+/**
  * Obtiene la hora actual en Eastern Time (ET).
- * @returns {number} La hora actual (0-23).
  */
 function obtenerHoraETNow() {
-    var now = new Date();
-    var etOff = esDST(now) ? -4 : -5;
-    return (now.getUTCHours() + etOff + 24) % 24;
+    return getInfoTiempoNY().hora;
 }
 
 /**
@@ -92,31 +111,57 @@ function actualizarTimestampsDashboardFiltro(filtro, count) {
     }
 }
 
-/**
- * Limpia una cadena de texto para convertirla en un número válido.
- * Remueve $, espacios, comas de miles y normaliza el punto decimal.
- * @param {any} val - El valor a limpiar.
- * @returns {number|null} El número limpio o null si no es válido.
- */
 function limpiarValor(val) {
     if (val === null || val === undefined || val === "") return null;
-    if (typeof val === "number") return typeof val === "number" ? val : null;
+    if (typeof val === "number") return val;
 
     var s = String(val).trim();
-    // Remueve $ y espacios
+    // Remueve $ y espacios (CallMeBot no los quiere)
     s = s.replace(/\$/g, "").replace(/\s/g, "");
     
-    // Si tiene comas y puntos, asumimos formato americano (1,234.56) o europeo (1.234,56)
+    // Si tiene comas y puntos (Formato complejo), decidir según posición
     if (s.indexOf(",") > -1 && s.indexOf(".") > -1) {
         if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
-            s = s.replace(/\./g, "").replace(",", "."); // Europeo
+            // Estilo europeo: 1.234,56
+            s = s.replace(/\./g, "").replace(",", "."); 
         } else {
-            s = s.replace(/,/g, ""); // Americano
+            // Estilo americano: 1,234.56
+            s = s.replace(/,/g, ""); 
         }
-    } else if (s.indexOf(",") > -1) {
+    } 
+    // Si SOLO tiene coma (ej. 40,17), asumimos que es el decimal (Latam)
+    else if (s.indexOf(",") > -1 && s.indexOf(".") === -1) {
         s = s.replace(",", ".");
     }
     
     var num = parseFloat(s);
     return isNaN(num) ? null : num;
+}
+
+/**
+ * Envía un mensaje vía WhatsApp usando la API de CallMeBot.
+ * @param {string} mensaje - El texto a enviar.
+ */
+function enviarWhatsApp(mensaje) {
+    if (!WS_PHONE || WS_API_KEY === "123456") {
+        Logger.log("WhatsApp no configurado. Mensaje omitido: " + mensaje);
+        return;
+    }
+
+    try {
+        // Limpiamos el número por si tiene + o espacios (CallMeBot no los quiere)
+        var cleanPhone = String(WS_PHONE).replace(/\+/g, "").replace(/\s/g, "");
+        var enc = encodeURIComponent(mensaje);
+        var url = "https://api.callmebot.com/whatsapp.php?phone=" + cleanPhone + "&text=" + enc + "&apikey=" + WS_API_KEY;
+        
+        var r = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+        
+        if (r.getResponseCode() === 200) {
+            Logger.log("WhatsApp enviado correctamente: " + mensaje);
+        } else {
+            Logger.log("Error de CallMeBot: " + r.getContentText());
+        }
+    } catch (e) {
+        Logger.log("Excepción al enviar WhatsApp: " + e.toString());
+    }
 }
