@@ -57,8 +57,8 @@ function actualizarSemaforoSPY() {
 
     if (semaforoRow > 0) {
         dash.getRange(semaforoRow, 2).setValue(semaforo).setBackground(bgColor).setFontColor(fgColor).setFontWeight("bold");
-        dash.getRange(semaforoRow, 3, 1, 2).merge().setValue(descripcion).setBackground(bgColor).setFontColor(fgColor);
-        dash.getRange(semaforoRow + 1, 2).setValue(new Date()).setNumberFormat("dd/mm/yyyy hh:mm");
+        dash.getRange(semaforoRow, 3, 1, 2).breakApart().merge().setValue(descripcion).setBackground(bgColor).setFontColor(fgColor);
+        dash.getRange(semaforoRow + 1, 2).breakApart().setValue(new Date()).setNumberFormat("dd/mm/yyyy hh:mm");
         
         dash.getRange(semaforoRow, 2).setNote(
             "SPY: $" + precioActual.toFixed(2) + "\n" +

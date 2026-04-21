@@ -155,7 +155,7 @@ function formatearHojaOperaciones(ws) {
     ws.setRowHeight(1, 34);
 
     ws.getRange(2, 1).setValue("Capital base ($)").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold").setFontSize(9);
-    ws.getRange(2, 2).setValue(2576).setBackground(C.LBLUE).setFontColor(C.ACCENT).setFontWeight("bold").setNumberFormat('"$"#,##0.00');
+    ws.getRange(2, 2).setValue(2164).setBackground(C.LBLUE).setFontColor(C.ACCENT).setFontWeight("bold").setNumberFormat('"$"#,##0.00');
     
     ws.getRange(3, 1).setValue("Aportes acumulados ($)").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold").setFontSize(9);
     ws.getRange(3, 2).setValue(0).setBackground("#FFF3E0").setFontColor("#E65100").setFontWeight("bold").setNumberFormat('"$"#,##0.00');
@@ -224,7 +224,7 @@ function opF(r) {
 
     return {
         targetSug: "=IF(OR(" + I + "=\"\";" + J + "=\"\");\"\";VALUE(" + I + ")+2*(VALUE(" + I + ")-VALUE(" + J + ")))",
-        accSug: "=IF(OR(" + I + "=\"\";" + J + "=\"\");\"\";IF((VALUE(" + I + ")-VALUE(" + J + "))>0;ROUND($B$6/(VALUE(" + I + ")-VALUE(" + J + "));0);\"\"))",
+        accSug: "=IF(OR(" + I + "=\"\";" + J + "=\"\");\"\";IF((VALUE(" + I + ")-VALUE(" + J + "))>0;ROUND($D$5/(VALUE(" + I + ")-VALUE(" + J + "));0);\"\"))",
         riesgo: "=IF(OR(" + I + "=\"\";" + J + "=\"\");\"\";IF(" + N + "<>\"\";" + N + "*(VALUE(" + I + ")-VALUE(" + J + "));IF(" + M + "<>\"\";" + M + "*(VALUE(" + I + ")-VALUE(" + J + "));\"\")))",
         potencial: "=IF(OR(" + I + "=\"\";" + L + "=\"\");\"\";IF(" + N + "<>\"\";" + N + "*(VALUE(" + L + ")-VALUE(" + I + "));IF(" + M + "<>\"\";" + M + "*(VALUE(" + L + ")-VALUE(" + I + "));\"\")))",
         rr: "=IF(OR(" + I + "=\"\";" + J + "=\"\";" + L + "=\"\");\"\";IF((VALUE(" + I + ")-VALUE(" + J + "))>0;ROUND((VALUE(L" + r + ")-VALUE(I" + r + "))/(VALUE(I" + r + ")-VALUE(J" + r + "));2);\"\"))",
@@ -243,49 +243,212 @@ function formatearDashboard(ws) {
     ws.clearFormats();
     ws.getRange(1, 1, ws.getMaxRows(), ws.getMaxColumns()).setDataValidation(null);
     
-    ws.setColumnWidth(1, 230); ws.setColumnWidth(2, 150);
-    ws.setColumnWidth(3, 150); ws.setColumnWidth(4, 360);
+    // Anchos equilibrados: A=230, B+C = 120+120=240, D=380
+    ws.setColumnWidth(1, 230); ws.setColumnWidth(2, 120);
+    ws.setColumnWidth(3, 120); ws.setColumnWidth(4, 380);
 
-    var row = 1;
-    ws.getRange(row, 1, 1, 4).merge().setValue("📊  MTM TRACKER  —  Dashboard de Rendimiento").setBackground(C.DARK).setFontColor(C.GREEN).setFontSize(15).setFontWeight("bold").setHorizontalAlignment("center");
-    ws.setRowHeight(row, 44); row += 2;
+    // --- ENCABEZADO ---
+    ws.getRange(1, 1, 1, 4).merge().setValue("📊  MTM TRACKER  —  Dashboard de Rendimiento")
+        .setBackground(C.DARK).setFontColor(C.GREEN).setFontSize(16).setFontWeight("bold").setHorizontalAlignment("center");
+    ws.setRowHeight(1, 44);
 
-    ws.getRange(row, 1, 1, 4).merge().setValue("🚦  CONDICIÓN DE MERCADO").setBackground(C.MID).setFontColor(C.GREEN).setFontWeight("bold"); row++;
+    var row = 3;
+
+    // --- SECCIÓN 1: CONDICIÓN DE MERCADO ---
+    ws.getRange(row, 1, 1, 4).merge().setValue("🚦  CONDICIÓN DE MERCADO").setBackground(C.MID).setFontColor(C.GREEN).setFontWeight("bold");
+    row++;
     ws.getRange(row, 1).setValue("Condición SPY:").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold");
     ws.getRange(row, 2).setValue("🟡 Calculando...").setBackground("#FFF9C4").setFontWeight("bold").setHorizontalAlignment("center");
-    ws.getRange(row, 5).setValue("SEMAFORO_VAL").setFontColor(C.WHITE).setBackground(C.WHITE); row += 2;
+    ws.getRange(row, 3, 1, 2).merge().setValue("—").setBackground("#FFF9C4").setHorizontalAlignment("center");
+    ws.getRange(row, 5).setValue("SEMAFORO_VAL").setFontColor(C.WHITE); row++; // Marcador en fila 4
+    
+    ws.getRange(row, 1).setValue("Actualización:").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold");
+    ws.getRange(row, 2).setValue("(pendiente)").setFontSize(9).setFontColor(C.GRAY);
+    ws.getRange(row, 5).setValue("DASH_FECHA").setFontColor(C.WHITE);
+    row += 2;
 
-    ws.getRange(row, 1, 1, 4).merge().setValue("📋  MÉTRICAS DEL PLAN").setBackground(C.MID).setFontColor(C.GREEN).setFontWeight("bold"); row++;
-    var metricsHeaders = ["Parámetro", "Valor", "Recomendado", "Nota"];
-    for (var i = 0; i < 4; i++) ws.getRange(row, i + 1).setValue(metricsHeaders[i]).setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold");
+    // --- SECCIÓN 2: PARÁMETROS DEL PLAN ---
+    ws.getRange(row, 1, 1, 4).merge().setValue("📋  PARÁMETROS DEL PLAN").setBackground(C.MID).setFontColor(C.GREEN).setFontWeight("bold"); row++;
+    ws.getRange(row, 1).setValue("Parámetro").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold");
+    ws.getRange(row, 2, 1, 2).merge().setValue("Valor / Rec.").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold").setHorizontalAlignment("center");
+    ws.getRange(row, 4).setValue("Nota explicativa").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold");
     row++;
 
-    var planParams = [
-        ["Capital total ($)", "=📈 Operaciones!B4", "—", "Capital real operando"],
-        ["% Riesgo por op", "3%", "3%", "Estándar de disciplina"],
-        ["Score MTM mínimo", "≥ 4", "≥ 4", "Filtro de calidad"],
-        ["Win Rate real (%)", "0%", "45%", "Objetivo de rentabilidad"]
+    var pRows = [
+        ["Capital total ($)", 2000, "Actualiza cuando inyectes capital nuevo"],
+        ["% Riesgo por operación", "3%", "No subas a 5% hasta tener 3 meses positivos"],
+        ["R/R mínimo objetivo", "2x", "No entres si el target no da al menos el doble"],
+        ["Operaciones objetivo/mes", "6-8", "Con $2K este rango es óptimo"],
+        ["Posiciones simultáneas", "Max 3", "No uses más del 60% del capital"],
+        ["Win rate objetivo", "45%", "Si cae < 35% mensual, pausa y revisa"],
+        ["Stop loss", "Firme", "NUNCA moverlo hacia abajo"],
+        ["Take profit", "Fijo 2x", "Puede subirse si hay momentum fuerte"]
     ];
-    for (var j = 0; j < planParams.length; j++) {
-        var bg = j % 2 === 0 ? C.LIGHT : C.WHITE;
-        ws.getRange(row, 1).setValue(planParams[j][0]).setBackground(bg).setFontWeight("bold");
-        ws.getRange(row, 2).setValue(planParams[j][1]).setBackground(C.LBLUE).setHorizontalAlignment("center");
-        ws.getRange(row, 3).setValue(planParams[j][2]).setBackground("#E8F5E9").setHorizontalAlignment("center");
-        ws.getRange(row, 4).setValue(planParams[j][3]).setBackground(bg).setFontSize(9).setFontColor(C.GRAY);
+    for (var j = 0; j < pRows.length; j++) {
+        var bg2 = j % 2 === 0 ? C.LIGHT : C.WHITE;
+        ws.getRange(row, 1).setValue(pRows[j][0]).setBackground(bg2).setFontWeight("bold");
+        ws.getRange(row, 2, 1, 2).merge().setValue(pRows[j][1]).setBackground(C.LBLUE).setHorizontalAlignment("center").setFontWeight("bold");
+        ws.getRange(row, 4).setValue(pRows[j][2]).setBackground(bg2).setFontSize(8).setFontColor(C.GRAY);
         row++;
     }
+    row++;
+
+    // --- SECCIÓN 3: MÉTRICAS EN TIEMPO REAL ---
+    ws.getRange(row, 1, 1, 4).merge().setValue("📈  MÉTRICAS EN TIEMPO REAL").setBackground(C.MID).setFontColor(C.GREEN).setFontWeight("bold"); row++;
+    ws.getRange(row, 1).setValue("Métrica").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold");
+    ws.getRange(row, 2, 1, 2).merge().setValue("Valor real").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold").setHorizontalAlignment("center");
+    ws.getRange(row, 4).setValue("Nota").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold");
+    row++;
+
+    var op = "'📈 Operaciones'!";
+    var rStart = row;
     
-    row += 2;
+    // Definimos los nombres de las métricas y sus fórmulas dinámicamente
+    var mDef = [
+        { label: "Capital inicial del mes ($)", formula: "=" + op + "B2", note: "El capital con el que empezaste (celda B2 en Ops)" },
+        { label: "P&L total del mes ($)", formula: "=SUM(" + op + "T8:T)", note: "Suma de ganancias y pérdidas acumuladas" },
+        { label: "Capital actual ($)", formula: "=B{r-2}+B{r-1}", note: "Capital inicial + P&L acumulado" },
+        { label: "Retorno del mes (%)", formula: "=IF(B{r-3}>0; B{r-2}/B{r-3}; 0)", note: "P&L ÷ Capital inicial" },
+        { label: "Total operaciones", formula: "=COUNTIFS(" + op + "D8:D; \"<>\"; " + op + "V8:V; \"<>\")", note: "Operaciones cerradas este mes" },
+        { label: "Ganadoras ✅", formula: "=COUNTIF(" + op + "V8:V; \"✅ Ganadora\")", note: "Trades cerrados en positivo" },
+        { label: "Perdedoras ❌", formula: "=COUNTIF(" + op + "V8:V; \"❌ Perdedora\")", note: "Trades cerrados en negativo" },
+        { label: "Win Rate real (%)", formula: "=IF((B{r-2}+B{r-1})>0; B{r-2}/(B{r-2}+B{r-1}); 0)", note: "Ganadoras ÷ (Ganadoras + Perdedoras)" },
+        { label: "P&L prom. ganadora ($)", formula: "=IF(B{r-3}>0; SUMIF(" + op + "V8:V; \"✅ Ganadora\"; " + op + "T8:T)/B{r-3}; 0)", note: "Cuánto ganas en promedio por acierto" },
+        { label: "P&L prom. perdedora ($)", formula: "=IF(B{r-3}>0; SUMIF(" + op + "V8:V; \"❌ Perdedora\"; " + op + "T8:T)/B{r-3}; 0)", note: "Cuánto pierdes en promedio por error" },
+        { label: "Expectativa ($)", formula: "=(B{r-3}*B{r-2})+((1-B{r-3})*B{r-1})", note: "Valor esperado por operación" },
+        { label: "R/R real promedio", formula: "=IF(ABS(B{r-2})>0; B{r-3}/ABS(B{r-2}); 0)", note: "Objetivo: 2x+" }
+    ];
+
+    for (var k = 0; k < mDef.length; k++) {
+        var kbg = k % 2 === 0 ? C.LIGHT : C.WHITE;
+        var rActual = row;
+        ws.getRange(rActual, 1).setValue(mDef[k].label).setBackground(kbg).setFontWeight("bold");
+        
+        var formula = mDef[k].formula.replace(/{r-(\d+)}/g, function(_, offset) {
+            return rActual - parseInt(offset);
+        });
+
+        var valCell = ws.getRange(rActual, 2, 1, 2).merge();
+        valCell.setFormula(formula).setBackground("#E3F2FD").setHorizontalAlignment("center").setFontWeight("bold");
+        
+        // Formatos
+        if (k === 0 || k === 1 || k === 2 || (k >= 8 && k <= 10)) valCell.setNumberFormat('"$"#,##0.00');
+        else if (k === 3 || k === 7) valCell.setNumberFormat('0.00%');
+        else if (k === 11) valCell.setNumberFormat('0.00"x"');
+
+        ws.getRange(rActual, 4).setValue(mDef[k].note).setBackground(kbg).setFontSize(8).setFontColor(C.GRAY);
+        row++;
+    }
+    row++;
+    row++;
+
+    // --- SECCIÓN 4: LAS 5 REGLAS ---
+    ws.getRange(row, 1, 1, 4).merge().setValue("📌  LAS 5 REGLAS  —  Si no se cumplen TODAS, no entras").setBackground(C.MID).setFontColor(C.GREEN).setFontWeight("bold"); row++;
+    var reglas = [
+        ["✅ 1. Aparece en 2+ filtros Finviz", "Más filtros coincidentes = más confirmación."],
+        ["✅ 2. ATR/LOW en verde (≥50%)", "El indicador CDI debe mostrar verde."],
+        ["✅ 3. Sector en Leading del RRG", "Revisar cada domingo en la WL de CDI."],
+        ["✅ 4. R/R mínimo 2x técnico", "Stop bajo soporte o a -1 ATR del precio."],
+        ["✅ 5. Sin earnings próximamente", "Revisa en la WL de CDI (próximos 7 días)."]
+    ];
+    for (var r = 0; r < reglas.length; r++) {
+        ws.getRange(row, 1).setValue(reglas[r][0]).setFontWeight("bold").setFontSize(9);
+        ws.getRange(row, 2, 1, 3).merge().setValue(reglas[r][1]).setFontSize(8).setFontColor(C.GRAY);
+        row++;
+    }
+    row++;
+
+    // --- SECCIÓN 5: ESTADO DE FILTROS ---
     ws.getRange(row, 1, 1, 4).merge().setValue("🔗  ESTADO DE FILTROS").setBackground(C.MID).setFontColor(C.GREEN).setFontWeight("bold"); row++;
     for (var f = 0; f < FILTROS.length; f++) {
         var fbg = f % 2 === 0 ? C.LIGHT : C.WHITE;
         ws.getRange(row, 1).setValue(f + 1).setBackground(fbg);
-        ws.getRange(row, 2).setValue(FILTROS[f].nombre).setBackground(fbg).setFontWeight("bold");
-        ws.getRange(row, 3).setValue("—").setBackground(fbg).setHorizontalAlignment("center");
-        ws.getRange(row, 4).setValue("Nunca").setBackground(C.LYELLOW).setHorizontalAlignment("center");
+        ws.getRange(row, 2, 1, 2).merge().setValue(FILTROS[f].nombre).setBackground(fbg).setFontWeight("bold");
+        ws.getRange(row, 4).setValue("—").setBackground(fbg).setHorizontalAlignment("center");
         row++;
     }
 }
+
+/**
+ * Formatea la hoja "🎯 Semana Tracker".
+ */
+function formatearHojaSemana(ws) {
+    ws.clear();
+    ws.clearContents();
+    ws.clearFormats();
+    ws.getRange(1, 1, ws.getMaxRows(), ws.getMaxColumns()).setDataValidation(null);
+
+    var nCols = 42; 
+    ws.getRange(1, 1, 1, nCols).merge()
+        .setValue("🎯  SEMANA TRACKER — Seguimiento de Candidatas Elegidas")
+        .setBackground(C.DARK).setFontColor(C.GREEN).setFontSize(14)
+        .setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle");
+    ws.setRowHeight(1, 40);
+
+    ws.getRange(2, 1, 1, nCols).merge()
+        .setValue("Paso 1: Copia de Top Candidatos  |  Paso 2: Activa el check 'Track' para iniciar registro horario")
+        .setBackground(C.ACCENT).setFontColor(C.YELLOW).setFontSize(10).setFontWeight("bold");
+    ws.setRowHeight(2, 22);
+
+    ws.getRange(3, 1).setValue("Semana Actual:").setBackground(C.MID).setFontColor(C.WHITE).setFontWeight("bold");
+    ws.getRange(3, 2).setValue("Semana del " + new Date().toLocaleDateString("es")).setBackground(C.LBLUE).setFontColor(C.MID);
+    ws.setRowHeight(3, 20);
+
+    var hdrs = [
+        "Ticker", "Empresa", "Sector", "Fecha Ent.", "Track", "Entrada $", "Stop $", "Target $", 
+        "Tgt Min 2x", "R/R Actual", "Perf Sem%", "Perf Mes%", "MTM/Filtros"
+    ];
+    var wCols = [70, 160, 110, 85, 50, 78, 72, 78, 80, 65, 78, 78, 180];
+    
+    for (var i = 0; i < hdrs.length; i++) {
+        ws.getRange(5, i + 1).setValue(hdrs[i])
+            .setBackground(C.DARK).setFontColor(C.WHITE)
+            .setFontWeight("bold").setHorizontalAlignment("center").setWrap(true);
+        ws.setColumnWidth(i + 1, wCols[i]);
+    }
+
+    // Encabezados de días
+    var dias = ["LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES"];
+    for (var d = 0; d < 5; d++) {
+        var c = 14 + (d * 5);
+        ws.getRange(4, c, 1, 5).merge().setValue(dias[d])
+            .setBackground(d % 2 === 0 ? "#1A237E" : "#283593")
+            .setFontColor(C.WHITE).setFontWeight("bold").setHorizontalAlignment("center");
+        for (var h = 0; h < 5; h++) {
+            ws.getRange(5, c + h).setValue(HORAS_CHECK[h] + "h")
+                .setBackground(C.MID).setFontColor(C.GRAY).setFontSize(8).setHorizontalAlignment("center");
+            ws.setColumnWidth(c + h, 65);
+        }
+    }
+
+    // Encabezados resumen
+    ws.getRange(4, 39, 1, 4).merge().setValue("RESUMEN SEMANA")
+        .setBackground("#E65100").setFontColor(C.WHITE).setFontWeight("bold").setHorizontalAlignment("center");
+    var resHdrs = ["PnL %", "★ Tgt", "✗ Stop", "Mejor Ent."];
+    for (var ri = 0; ri < 4; ri++) {
+        ws.getRange(5, 39 + ri).setValue(resHdrs[ri])
+            .setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold").setHorizontalAlignment("center");
+        ws.setColumnWidth(39 + ri, 75);
+    }
+    ws.setRowHeight(5, 36);
+
+    // Filas de datos (20 candidatos)
+    for (var r = 6; r < 6 + MAX_CAND; r++) {
+        var bg = r % 2 === 0 ? C.LIGHT : C.WHITE;
+        ws.getRange(r, 1, 1, nCols).setBackground(bg).setFontSize(9).setVerticalAlignment("middle");
+        ws.getRange(r, 1).setFontWeight("bold").setHorizontalAlignment("center");
+        ws.getRange(r, 5).setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build()).setHorizontalAlignment("center");
+        
+        // Fórmulas R/R y Tgt 2x (Referencia a columnas F=6, G=7)
+        var E = "F" + r; var S_ = "G" + r;
+        ws.getRange(r, 9).setFormula('=IF(OR(' + E + '="";' + S_ + '="");"";' + E + '+2*(' + E + '-' + S_ + '))').setNumberFormat('"$"#,##0.00');
+        ws.getRange(r, 10).setFormula('=IF(OR(' + E + '="";' + S_ + '="");"";"1:2.00")').setHorizontalAlignment("center");
+        
+        ws.setRowHeight(r, 22);
+    }
+    ws.setFrozenRows(5);
+}
+
 
 /**
  * Formatea la hoja "WL CDI".

@@ -130,8 +130,8 @@ var REPORT_SHEET = "📊 Reporte Viernes";
 var HORAS_CHECK = [10, 11, 13, 14, 15];
 
 /** @constant {number} Máximo de candidatas a trackear simultáneamente */
-var MAX_CAND = 10;
+var MAX_CAND = 20;
 
 /** @constant {number} Índice de columna de inicio de precios y resumen */
-var COL_PRECIOS_INI = 12;
-var COL_RESUMEN_INI = 37;
+var COL_PRECIOS_INI = 14;
+var COL_RESUMEN_INI = 39;

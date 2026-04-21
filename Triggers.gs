@@ -28,7 +28,8 @@ function onOpen() {
         .addItem("🔧 Reconfigurar solo Operaciones", "reconfigurarSoloOperaciones")
         .addSeparator()
         .addItem("🎯 Configurar Semana Tracker", "configurarSemanaTracker")
-        .addItem("🧹 Limpiar decimales (pegar desde Top)", "sanitizarDecimalesSemana")
+        .addItem("🧹 Limpiar decimales (Semana Tracker)", "sanitizarDecimalesSemana")
+        .addItem("🧹 Limpiar decimales (Operaciones)", "sanitizarDecimalesOperaciones")
         .addItem("🔍 Verificar semana", "verificarSemana")
         .addItem("📊 Registrar precios ahora (manual)", "registrarPreciosManual")
         .addItem("📋 Generar Reporte Viernes", "generarReporteViernes")
@@ -50,32 +51,89 @@ function onEdit(e) {
     try {
         var range = e.range;
         var sheet = range.getSheet();
-        if (sheet.getName() !== "📈 Operaciones") return;
-        if (range.getColumn() !== 4) return;   // col D = Ticker
-        if (range.getRow() < 8) return;
+        var ss = SpreadsheetApp.getActiveSpreadsheet();
+        var sheetName = sheet.getName();
+        var numRows = range.getNumRows();
+        var numCols = range.getNumColumns();
+        var startRow = range.getRow();
+        var startCol = range.getColumn();
 
-        var ticker = String(e.value || "").trim().toUpperCase();
-        var row = range.getRow();
-        if (!ticker) return;
+        // Solo actuamos si la edición toca las columnas de Ticker (col 4 en Ops, col 1 en Semana)
+        var isOps = (sheetName === "📈 Operaciones" && startCol <= 4 && (startCol + numCols - 1) >= 4);
+        var isSem = (sheetName === SEMANA_SHEET && startCol <= 1 && (startCol + numCols - 1) >= 1);
 
-        sheet.getRange(row, 4).setValue(ticker);
-        var info = buscarTicker(ticker);
+        if (!isOps && !isSem) return;
 
-        if (info) {
-            sheet.getRange(row, 5).setValue(info.empresa || "");  // E
-            sheet.getRange(row, 6).setValue(info.sector || "");  // F
-            sheet.getRange(row, 7).setValue(info.perfWeek || ""); // G
-            sheet.getRange(row, 8).setValue(info.perfMonth || ""); // H
-            colorPct(sheet.getRange(row, 7), info.perfWeek, 5, 0);
-            colorPct(sheet.getRange(row, 8), info.perfMonth, 10, 0);
-            SpreadsheetApp.getActiveSpreadsheet().toast(
-                ticker + " → " + info.empresa + " | Sem: " + info.perfWeek + " | Mes: " + info.perfMonth,
-                "✅ Autocompleto", 4);
-        } else {
-            sheet.getRange(row, 5).setValue("No encontrado — actualiza filtros");
-            SpreadsheetApp.getActiveSpreadsheet().toast(
-                ticker + " no está en la WL. Actualiza los filtros primero.", "⚠️", 4);
+        var values = range.getValues();
+
+        for (var r = 0; r < numRows; r++) {
+            for (var c = 0; c < numCols; c++) {
+                var currentRow = startRow + r;
+                var currentCol = startCol + c;
+                var rawValue = values[r][c];
+                var ticker = String(rawValue || "").trim().toUpperCase();
+                if (!ticker) continue;
+
+                // --- CASO A: HOJA DE OPERACIONES ---
+                if (sheetName === "📈 Operaciones" && currentCol === 4 && currentRow >= 8) {
+                    var sTracker = ss.getSheetByName(SEMANA_SHEET);
+                    var syncData = null;
+                    if (sTracker) {
+                        var stData = sTracker.getRange(6, 1, MAX_CAND, 8).getValues();
+                        for (var i = 0; i < stData.length; i++) {
+                            if (String(stData[i][0]).trim().toUpperCase() === ticker) {
+                                syncData = {
+                                    fecha: stData[i][3], entrada: stData[i][5],
+                                    stop: stData[i][6], target: stData[i][7]
+                                };
+                                break;
+                            }
+                        }
+                    }
+
+                    var infoOps = buscarTicker(ticker);
+                    if (infoOps) {
+                        sheet.getRange(currentRow, 5).setValue(infoOps.empresa || "");
+                        sheet.getRange(currentRow, 6).setValue(infoOps.sector || "");
+                        sheet.getRange(currentRow, 7).setValue(infoOps.perfWeek || "");
+                        sheet.getRange(currentRow, 8).setValue(infoOps.perfMonth || "");
+                        colorPct(sheet.getRange(currentRow, 7), infoOps.perfWeek, 5, 0);
+                        colorPct(sheet.getRange(currentRow, 8), infoOps.perfMonth, 10, 0);
+
+                        if (syncData) {
+                            if (syncData.fecha) sheet.getRange(currentRow, 3).setValue(syncData.fecha);
+                            if (syncData.entrada) sheet.getRange(currentRow, 9).setValue(syncData.entrada);
+                            if (syncData.stop) sheet.getRange(currentRow, 10).setValue(syncData.stop);
+                            if (syncData.target) sheet.getRange(currentRow, 12).setValue(syncData.target);
+                        }
+                    }
+                }
+
+                // --- CASO B: HOJA SEMANA TRACKER ---
+                if (sheetName === SEMANA_SHEET && currentCol === 1 && currentRow >= 6) {
+                    var infoSem = buscarTicker(ticker);
+                    if (infoSem) {
+                        sheet.getRange(currentRow, 1).setValue(ticker); // Asegurar mayúsculas
+                        sheet.getRange(currentRow, 2).setValue(infoSem.empresa || "");
+                        sheet.getRange(currentRow, 3).setValue(infoSem.sector || "");
+                        sheet.getRange(currentRow, 11).setValue(infoSem.perfWeek || "");
+                        sheet.getRange(currentRow, 12).setValue(infoSem.perfMonth || "");
+                        colorPct(sheet.getRange(currentRow, 11), infoSem.perfWeek, 5, 0);
+                        colorPct(sheet.getRange(currentRow, 12), infoSem.perfMonth, 10, 0);
+
+                        var scoreFiltros = infoSem.score + " / " + infoSem.filtrosStr;
+                        sheet.getRange(currentRow, 13).setValue(scoreFiltros).setFontSize(8).setHorizontalAlignment("center");
+                    }
+                }
+            }
         }
+        
+        if (numRows * numCols < 5) {
+            ss.toast("Autocompletado procesado", "✅", 2);
+        } else {
+            ss.toast("Procesado pegado masivo (" + (numRows * numCols) + " celdas)", "✅ Bulk", 3);
+        }
+
     } catch (err) { Logger.log("onEdit: " + err.message); }
 }
 
@@ -117,10 +175,8 @@ function desinstalarTriggers() {
  * Función que corre el trigger horario y decide si registrar precios.
  */
 function registrarPreciosTrigger() {
-    var now = new Date();
-    var etOff = esDST(now) ? -4 : -5;
-    var etHour = (now.getUTCHours() + etOff + 24) % 24;
-    var etDay = now.getDay();
+    var etHour = obtenerHoraETNow();
+    var etDay = new Date().getDay();
 
     if (etDay < 1 || etDay > 5) return;
     if (HORAS_CHECK.indexOf(etHour) < 0) return;

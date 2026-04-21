@@ -36,6 +36,16 @@ function esDST(date) {
 }
 
 /**
+ * Obtiene la hora actual en Eastern Time (ET).
+ * @returns {number} La hora actual (0-23).
+ */
+function obtenerHoraETNow() {
+    var now = new Date();
+    var etOff = esDST(now) ? -4 : -5;
+    return (now.getUTCHours() + etOff + 24) % 24;
+}
+
+/**
  * Obtiene el precio actual de un ticker desde Yahoo Finance.
  */
 function fetchPrecioYahoo(ticker) {
@@ -80,4 +90,33 @@ function actualizarTimestampsDashboardFiltro(filtro, count) {
             break;
         }
     }
+}
+
+/**
+ * Limpia una cadena de texto para convertirla en un número válido.
+ * Remueve $, espacios, comas de miles y normaliza el punto decimal.
+ * @param {any} val - El valor a limpiar.
+ * @returns {number|null} El número limpio o null si no es válido.
+ */
+function limpiarValor(val) {
+    if (val === null || val === undefined || val === "") return null;
+    if (typeof val === "number") return typeof val === "number" ? val : null;
+
+    var s = String(val).trim();
+    // Remueve $ y espacios
+    s = s.replace(/\$/g, "").replace(/\s/g, "");
+    
+    // Si tiene comas y puntos, asumimos formato americano (1,234.56) o europeo (1.234,56)
+    if (s.indexOf(",") > -1 && s.indexOf(".") > -1) {
+        if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+            s = s.replace(/\./g, "").replace(",", "."); // Europeo
+        } else {
+            s = s.replace(/,/g, ""); // Americano
+        }
+    } else if (s.indexOf(",") > -1) {
+        s = s.replace(",", ".");
+    }
+    
+    var num = parseFloat(s);
+    return isNaN(num) ? null : num;
 }

@@ -7,8 +7,14 @@
  */
 function configurarSemanaTracker() {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ui = SpreadsheetApp.getUi();
 
     var ws = ss.getSheetByName(SEMANA_SHEET);
+    if (ws && ws.getLastRow() > 5) {
+        var resp = ui.alert("⚠️ Conservar datos", "¿Deseas borrar los datos actuales para reconfigurar la hoja? (Si eliges NO, se cancelará la operación)", ui.ButtonSet.YES_NO);
+        if (resp !== ui.Button.YES) return;
+    }
+
     if (!ws) ws = ss.insertSheet(SEMANA_SHEET);
     formatearHojaSemana(ws);
 
@@ -30,21 +36,28 @@ function registrarPrecios(horaET, esManual) {
     var ws = ss.getSheetByName(SEMANA_SHEET);
     if (!ws || ws.getLastRow() < 6) return;
 
-    var datos = ws.getRange(6, 1, MAX_CAND, 7).getValues();
+    var datos = ws.getRange(6, 1, MAX_CAND, 8).getValues();
     var activas = [];
     for (var i = 0; i < datos.length; i++) {
         var tk = String(datos[i][0]).trim().toUpperCase();
-        if (tk && datos[i][3] === true) {
+        // Cambiado de === true a == true para mayor flexibilidad
+        if (tk && datos[i][4] == true) { 
             activas.push({
                 ticker: tk,
                 row: 6 + i,
-                entrada: parseFloat(datos[i][4]) || 0,
-                stop: parseFloat(datos[i][5]) || 0,
-                target: parseFloat(datos[i][6]) || 0
+                entrada: parseFloat(datos[i][5]) || 0,
+                stop: parseFloat(datos[i][6]) || 0,
+                target: parseFloat(datos[i][7]) || 0
             });
         }
     }
-    if (activas.length === 0) return;
+
+    if (activas.length === 0) {
+        ss.toast("No se encontraron tickers con el check 'Track' activado.", "⚠️", 5);
+        return;
+    }
+    
+    ss.toast("Procesando " + activas.length + " tickers activos...", "⏳", 4);
 
     var log = ss.getSheetByName(PRICE_LOG);
     if (!log) { 
@@ -166,7 +179,8 @@ function resetearSemana() {
 
     var ws = ss.getSheetByName(SEMANA_SHEET);
     if (ws && ws.getLastRow() >= 6) {
-        ws.getRange(6, COL_PRECIOS_INI, ws.getLastRow() - 5, 29).clearContent().clearFormat();
+        // Limpiar 30 columnas desde el inicio de precios (25 precios + 5 de resumen/extras)
+        ws.getRange(6, COL_PRECIOS_INI, ws.getLastRow() - 5, 30).clearContent().clearFormat();
         ws.getRange(3, 2).setValue("Semana del " + new Date().toLocaleDateString("es"));
     }
 
@@ -237,17 +251,52 @@ function sanitizarDecimalesSemana() {
 
     var corregidos = 0;
     for (var r = 6; r <= 6 + MAX_CAND - 1; r++) {
-        for (var c = 5; c <= 7; c++) {
+        for (var c = 6; c <= 8; c++) { // Entrada, Stop, Target
             var cell = ws.getRange(r, c);
             var val = cell.getValue();
-            if (!val) continue;
-
-            var num = parseFloat(String(val).replace(",", "."));
-            if (!isNaN(num) && num > 0) {
+            var num = limpiarValor(val);
+            if (num !== null && num > 0) {
                 cell.setValue(num).setNumberFormat('"$"#,##0.00');
                 corregidos++;
             }
         }
     }
-    ss.toast(corregidos + " valores corregidos.", "✅", 4);
+    ss.toast(corregidos + " valores corregidos en Semana Tracker.", "✅", 4);
+}
+
+/**
+ * Sanitiza y limpia decimales en la hoja de Operaciones.
+ */
+function sanitizarDecimalesOperaciones() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ws = ss.getSheetByName("📈 Operaciones");
+    if (!ws) return;
+
+    var corregidos = 0;
+    
+    // 1: Limpiar B2 (Capital Inicial)
+    var cellB2 = ws.getRange(2, 2);
+    var numB2 = limpiarValor(cellB2.getValue());
+    if (numB2 !== null) {
+        cellB2.setValue(numB2).setNumberFormat('"$"#,##0.00');
+        corregidos++;
+    }
+
+    var lastRow = ws.getLastRow();
+    if (lastRow < 8) return;
+
+    // 2: Limpiar lista I(9), J(10), L(12)
+    var cols = [9, 10, 12];
+    for (var r = 8; r <= lastRow; r++) {
+        for (var i = 0; i < cols.length; i++) {
+            var cell = ws.getRange(r, cols[i]);
+            var val = cell.getValue();
+            var num = limpiarValor(val);
+            if (num !== null && num > 0) {
+                cell.setValue(num).setNumberFormat('"$"#,##0.00');
+                corregidos++;
+            }
+        }
+    }
+    ss.toast(corregidos + " valores corregidos en Operaciones.", "✅", 4);
 }

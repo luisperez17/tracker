@@ -175,6 +175,32 @@ function consolidarTop(perfMap) {
  */
 function buscarTicker(ticker) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // 1: Buscar en Top Candidatos primero (tiene Score y Filtros ya calculados)
+    var top = ss.getSheetByName("🏆 Top Candidatos");
+    if (top && top.getLastRow() >= 5) {
+        var nFiltros = FILTROS.length;
+        var totalCols = 9 + nFiltros + 1; // Hasta Score MTM
+        var datosTop = top.getRange(5, 1, top.getLastRow() - 4, totalCols).getValues();
+        for (var j = 0; j < datosTop.length; j++) {
+            if (String(datosTop[j][0]).trim().toUpperCase() === ticker) {
+                var fltrs = [];
+                for (var f = 0; f < nFiltros; f++) {
+                    if (String(datosTop[j][8 + f]).trim() === "✓") fltrs.push(FILTROS[f].key.substring(0, 6));
+                }
+                return {
+                    empresa: datosTop[j][1] || "", 
+                    sector: datosTop[j][2] || "",
+                    perfWeek: datosTop[j][3] || "", 
+                    perfMonth: datosTop[j][4] || "",
+                    score: datosTop[j][8 + nFiltros] || 0,
+                    filtrosStr: fltrs.join(", ")
+                };
+            }
+        }
+    }
+
+    // 2: Buscar en filtros individuales como fallback
     for (var fi = 0; fi < FILTROS.length; fi++) {
         var ws = ss.getSheetByName(FILTROS[fi].hoja);
         if (!ws || ws.getLastRow() < 7) continue;
@@ -185,21 +211,9 @@ function buscarTicker(ticker) {
                     empresa: datos[i][2] || "",
                     sector: datos[i][3] || "",
                     perfWeek: datos[i][11] || "",
-                    perfMonth: datos[i][12] || ""
-                };
-            }
-        }
-    }
-    var top = ss.getSheetByName("🏆 Top Candidatos");
-    if (top && top.getLastRow() >= 5) {
-        var datos2 = top.getRange(5, 1, top.getLastRow() - 4, 6).getValues();
-        for (var j = 0; j < datos2.length; j++) {
-            if (String(datos2[j][0]).trim().toUpperCase() === ticker) {
-                return {
-                    empresa: datos2[j][1] || "", 
-                    sector: datos2[j][2] || "",
-                    perfWeek: datos2[j][3] || "", 
-                    perfMonth: datos2[j][4] || ""
+                    perfMonth: datos[i][12] || "",
+                    score: "?",
+                    filtrosStr: FILTROS[fi].nombre
                 };
             }
         }
@@ -220,7 +234,7 @@ function generarRankingParaHistorial() {
     var nItems = Math.min(ws.getLastRow() - 5, 20);
     if (nItems <= 0) return null;
 
-    var wlData = ws.getRange(6, 1, nItems, 11).getValues();
+    var wlData = ws.getRange(6, 1, nItems, 14).getValues();
     var cands = [];
     for (var i = 0; i < wlData.length; i++) {
         var tk = String(wlData[i][0]).trim().toUpperCase();
@@ -229,15 +243,17 @@ function generarRankingParaHistorial() {
             ticker: tk,
             empresa: wlData[i][1] || "",
             sector: wlData[i][2] || "",
-            entrada: parseFloat(wlData[i][4]) || 0,
-            stop: parseFloat(wlData[i][5]) || 0,
-            target: parseFloat(wlData[i][6]) || 0,
-            tmin2x: parseFloat(wlData[i][7]) || 0,
-            rr: parseFloat(wlData[i][8]) || 0,
-            perfSem: wlData[i][9] || "",
-            perfMes: wlData[i][10] || "",
-            scoreMTM: wlData[i][11] || 0,
-            filtrosStr: wlData[i][12] || ""
+            fechaEntrada: wlData[i][3] || "", // col 4
+            // Track check is at stData[i][4] -> skip
+            entrada: parseFloat(wlData[i][5]) || 0, // col 6
+            stop: parseFloat(wlData[i][6]) || 0,    // col 7
+            target: parseFloat(wlData[i][7]) || 0,  // col 8
+            tmin2x: parseFloat(wlData[i][8]) || 0,  // col 9
+            rr: parseFloat(wlData[i][9]) || 0,      // col 10
+            perfSem: wlData[i][10] || "",           // col 11
+            perfMes: wlData[i][11] || "",           // col 12
+            scoreMTM: wlData[i][12] || 0,           // col 13
+            filtrosStr: wlData[i][13] || ""         // col 14
         });
     }
 
