@@ -234,14 +234,18 @@ function eliminarTriggersPrecios() {
  * Función que corre el trigger horario y decide si registrar precios.
  */
 function registrarPreciosTrigger() {
+    // 1. Programar el siguiente de inmediato para no romper la cadena si hay un error
+    instalarProximoCheck();
+
     var etHour = obtenerHoraETNow();
     var etDay = new Date().getDay();
 
+    // Validaciones de seguridad
     if (etDay < 1 || etDay > 5) return;
     if (HORAS_CHECK.indexOf(etHour) < 0) return;
     if (yaRegistradoHoy(etHour)) return;
 
-    registrarPrecios(etHour, false);  // false = trigger real
+    registrarPrecios(etHour, false); 
 }
 
 /**

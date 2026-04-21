@@ -15,6 +15,13 @@ function configurarHojas() {
         ss.moveActiveSheet(1); 
     }
     formatearDashboard(dash);
+    actualizarSemaforoSPY();
+    actualizarTimestampsDashboard();
+    actualizarFechaDashboard();
+    
+    // Refrescar el gráfico de equidad
+    var dash = ss.getSheetByName("📊 Dashboard");
+    if (dash) generarGraficoEquidad(dash);
 
     var top = ss.getSheetByName("🏆 Top Candidatos");
     if (!top) top = ss.insertSheet("🏆 Top Candidatos");
@@ -367,6 +374,50 @@ function formatearDashboard(ws) {
         ws.getRange(row, 4).setValue("—").setBackground(fbg).setHorizontalAlignment("center");
         row++;
     }
+
+    // --- SECCIÓN 6: GRÁFICO DE EQUIDAD (Visualización de Crecimiento) ---
+    try {
+        generarGraficoEquidad(ws);
+    } catch (e) {
+        Logger.log("No se pudo generar el gráfico: " + e.message);
+    }
+}
+
+/**
+ * Genera o actualiza el gráfico lineal de crecimiento (Equity Curve).
+ * Se posiciona dinámicamente en el Dashboard.
+ */
+function generarGraficoEquidad(ws) {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ops = ss.getSheetByName("📈 Operaciones");
+    if (!ops) return;
+
+    // Eliminar gráficos previos en el Dashboard para no duplicar
+    var charts = ws.getCharts();
+    for (var i = 0; i < charts.length; i++) {
+        ws.removeChart(charts[i]);
+    }
+
+    // Rango de fechas (Eje X) y Capital Acumulado (Eje Y)
+    var lastRow = ops.getLastRow();
+    if (lastRow < 8) return;
+
+    var chart = ws.newChart()
+        .setChartType(Charts.ChartType.AREA)
+        .addRange(ops.getRange("'📈 Operaciones'!C8:C" + lastRow)) // Fecha
+        .addRange(ops.getRange("'📈 Operaciones'!W8:W" + lastRow)) // Capital Acumulado
+        .setPosition(7, 4, 0, 0) // Posicionar a la derecha de los parámetros
+        .setOption('title', '📈 CURVA DE EQUIDAD (CRECIMIENTO TOTAL)')
+        .setOption('vAxis.format', '$#,##0')
+        .setOption('hAxis.title', 'Trades en el tiempo')
+        .setOption('colors', ['#2E7D32']) // Verde oscuro profesional
+        .setOption('legend', {position: 'none'})
+        .setOption('height', 360)
+        .setOption('width', 380)
+        .setOption('interpolateNulls', true)
+        .build();
+
+    ws.insertChart(chart);
 }
 
 /**
