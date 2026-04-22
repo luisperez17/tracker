@@ -160,20 +160,6 @@ function desinstalarTriggers() {
 }
 
 /**
- * Función que ejecuta el disparador automático.
- * Registra precios, envía el reporte y agenda la siguiente ejecución.
- */
-function registrarPreciosTrigger() {
-    try {
-        registrarPrecios(); // Ya incluye el WhatsApp Summary
-    } catch (e) {
-        Logger.log("Error en registrarPreciosTrigger: " + e.toString());
-    } finally {
-        programarSiguienteCheck(); // Siempre intentamos agendar el siguiente para no romper la cadena
-    }
-}
-
-/**
  * Calcula la próxima hora de captura y genera un disparador exacto (atDate).
  */
 function programarSiguienteCheck() {
@@ -231,11 +217,12 @@ function eliminarTriggersPrecios() {
 }
 
 /**
- * Función que corre el trigger horario y decide si registrar precios.
+ * Función que ejecuta el disparador de cadena.
+ * Agenda el siguiente check de inmediato, luego registra precios.
  */
 function registrarPreciosTrigger() {
     // 1. Programar el siguiente de inmediato para no romper la cadena si hay un error
-    instalarProximoCheck();
+    programarSiguienteCheck();
 
     var etHour = obtenerHoraETNow();
     var etDay = new Date().getDay();

@@ -14,7 +14,7 @@ function actualizarSemaforoDiario() {
     if (etDay === 6) return;
 
     actualizarSemaforoSPY();
-    // calcularRachasDashboard(); // Asumo que se implementará en MetricsService o similar si crece
+    calcularRachasDashboard();
     actualizarFechaDashboard();
 }
 
