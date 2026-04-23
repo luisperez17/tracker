@@ -266,66 +266,6 @@ function generarReporteViernes() {
     ss.toast("Reporte de rendimiento generado con éxito.", "✅", 5);
 }
 
-/**
- * Escanea la semana y resalta acciones en riesgo o near target (Uso Miércoles).
- */
-function verificarEstadoMiercoles() {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var ws = ss.getSheetByName(SEMANA_SHEET);
-    if (!ws || ws.getLastRow() < 6) return;
-
-    var data = ws.getRange(6, 1, MAX_CAND, 11).getValues();
-    var props = PropertiesService.getScriptProperties();
-    var hoy = new Date().toLocaleDateString();
-    var alertCount = 0;
-
-    for (var i = 0; i < data.length; i++) {
-        var tk = String(data[i][0]).trim();
-        if (!tk) continue;
-
-        var row = 6 + i;
-        var entrada = parseFloat(data[i][5]);
-        var stop = parseFloat(data[i][6]);
-        var target = parseFloat(data[i][7]);
-        if (!entrada) continue;
-
-        var precioActual = fetchPrecioYahoo(tk);
-        if (precioActual === null) continue;
-
-        var distStop = stop > 0 ? (precioActual - stop) / precioActual : 1;
-        var distTarget = target > 0 ? (target - precioActual) / precioActual : 1;
-
-        // Lógica de Alerta de Riesgo (Stop Loss)
-        if (distStop < 0.015 && distStop > -0.01) {
-            ws.getRange(row, 1, 1, 3).setBackground("#FFEBEE");
-            ws.getRange(row, 7).setBackground(C.RED).setFontColor("#FFFFFF");
-            
-            // Anti-spam: Solo enviar una vez al día por ticker
-            if (props.getProperty("alert_stop_" + tk) !== hoy) {
-                enviarWhatsApp("🛑 ALERTA MTM: " + tk + " está en riesgo. Precio: $" + precioActual.toFixed(2) + " (Cerca del Stop: $" + stop.toFixed(2) + ")");
-                props.setProperty("alert_stop_" + tk, hoy);
-            }
-            alertCount++;
-        } 
-        // Lógica de Alerta de Beneficio (Target)
-        else if (distTarget < 0.015 && distTarget > -0.01) {
-            ws.getRange(row, 1, 1, 3).setBackground("#E8F5E9");
-            ws.getRange(row, 8).setBackground(C.GREEN).setFontColor("#FFFFFF");
-            
-            if (props.getProperty("alert_target_" + tk) !== hoy) {
-                enviarWhatsApp("🎯 ALERTA MTM: " + tk + " cerca del TARGET. Precio: $" + precioActual.toFixed(2) + " (Objetivo: $" + target.toFixed(2) + ")");
-                props.setProperty("alert_target_" + tk, hoy);
-            }
-            alertCount++;
-        }
-    }
-
-    if (alertCount > 0) {
-        ss.toast(alertCount + " alertas detectadas y procesadas.", "⚠️ Gestión Riesgo", 6);
-    } else {
-        ss.toast("Sin alertas críticas. Todas las posiciones en zona segura.", "✅", 4);
-    }
-}
 
 /**
  * Función de prueba para validar la conexión con WhatsApp.
@@ -523,4 +463,34 @@ function enviarResumenManual() {
     } else {
         ss.toast("No hay acciones activas para reportar.", "⚠️", 4);
     }
+}
+
+/**
+ * Obtiene un objeto con los tickers que el usuario tiene marcados como 'Track' en la hoja semanal.
+ * @returns {Object} Mapa de tickers -> datos (entrada, stop, target).
+ */
+function obtenerTickersTrackeados() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ws = ss.getSheetByName(SEMANA_SHEET);
+    var tracked = {};
+    if (!ws || ws.getLastRow() < 6) return tracked;
+
+    var data = ws.getRange(6, 1, MAX_CAND, 14).getValues();
+    for (var i = 0; i < data.length; i++) {
+        var tk = String(data[i][0]).trim().toUpperCase();
+        var isTracked = data[i][4] === true;
+        if (tk && isTracked) {
+            tracked[tk] = {
+                ticker: tk,
+                empresa: data[i][1],
+                sector: data[i][2],
+                entrada: parseFloat(data[i][5]) || 0,
+                stop: parseFloat(data[i][6]) || 0,
+                target: parseFloat(data[i][7]) || 0,
+                score: data[i][12],
+                filtros: data[i][13]
+            };
+        }
+    }
+    return tracked;
 }
