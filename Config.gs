@@ -128,14 +128,18 @@ var TIER_SCORES = {
 
 /** @constant {string} Nombres de las hojas de trabajo del Tracker */
 var SEMANA_SHEET = "🎯 Semana Tracker";
-var PRICE_LOG = "📈 Price Log";
+var LOG_SHEET = "📊 Score Log";
+var OPS_SHEET = "📈 Operaciones";
 var REPORT_SHEET = "📊 Reporte Viernes";
 
-/** @constant {Array<number>} Horas ET en que se captura precio */
-var HORAS_CHECK = [10, 11, 13, 14, 15];
+/** @constant {Array<number>} Horas ET en que se captura precio (10, 11, 13, 14.5, 15.75) */
+var HORAS_CHECK = [10, 11, 13, 14.5, 15.75];
 
-/** @constant {number} Máximo de candidatas a trackear simultáneamente */
-var MAX_CAND = 20;
+/** @constant {Array<string>} Filtros a consultar a las 10am (Tier 1 y 2) */
+var TIER_10AM = ["post_earnings", "newhigh", "ytd", "uptrend"];
+
+/** @constant {number} Máximo de candidatas a trackear (Histórico extendido) */
+var MAX_CAND = 500;
 
 /** @constant {number} Índice de columna de inicio de precios y resumen */
 var COL_PRECIOS_INI = 14;

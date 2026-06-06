@@ -9,16 +9,16 @@ function configurarHojas() {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
 
     var dash = ss.getSheetByName("📊 Dashboard");
-    if (!dash) { 
-        dash = ss.insertSheet("📊 Dashboard"); 
-        ss.setActiveSheet(dash); 
-        ss.moveActiveSheet(1); 
+    if (!dash) {
+        dash = ss.insertSheet("📊 Dashboard");
+        ss.setActiveSheet(dash);
+        ss.moveActiveSheet(1);
     }
     formatearDashboard(dash);
     actualizarSemaforoSPY();
     actualizarTimestampsDashboard();
     actualizarFechaDashboard();
-    
+
     // Refrescar el gráfico de equidad
     var dash = ss.getSheetByName("📊 Dashboard");
     if (dash) generarGraficoEquidad(dash);
@@ -74,7 +74,7 @@ function formatearHojaFiltro(ws, filtro) {
         "Mkt Cap", "P/E", "Precio", "Cambio %", "Volumen",
         "Perf Sem %", "Perf Mes %", "Perf Trim %", "Origen"];
     var ws_ = [40, 80, 200, 130, 180, 60, 80, 60, 80, 80, 100, 90, 90, 90, 70];
-    
+
     for (var i = 0; i < hdrs.length; i++) {
         var bg = (i >= 11 && i <= 13) ? "#1A237E" : C.DARK;
         var fg = (i >= 11 && i <= 13) ? C.YELLOW : C.WHITE;
@@ -163,7 +163,7 @@ function formatearHojaOperaciones(ws) {
 
     ws.getRange(2, 1).setValue("Capital base ($)").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold").setFontSize(9);
     ws.getRange(2, 2).setValue(2164).setBackground(C.LBLUE).setFontColor(C.ACCENT).setFontWeight("bold").setNumberFormat('"$"#,##0.00');
-    
+
     ws.getRange(3, 1).setValue("Aportes acumulados ($)").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold").setFontSize(9);
     ws.getRange(3, 2).setValue(0).setBackground("#FFF3E0").setFontColor("#E65100").setFontWeight("bold").setNumberFormat('"$"#,##0.00');
 
@@ -249,7 +249,7 @@ function formatearDashboard(ws) {
     ws.clearContents();
     ws.clearFormats();
     ws.getRange(1, 1, ws.getMaxRows(), ws.getMaxColumns()).setDataValidation(null);
-    
+
     // Anchos equilibrados: A=230, B+C = 120+120=240, D=380
     ws.setColumnWidth(1, 230); ws.setColumnWidth(2, 120);
     ws.setColumnWidth(3, 120); ws.setColumnWidth(4, 380);
@@ -268,7 +268,7 @@ function formatearDashboard(ws) {
     ws.getRange(row, 2).setValue("🟡 Calculando...").setBackground("#FFF9C4").setFontWeight("bold").setHorizontalAlignment("center");
     ws.getRange(row, 3, 1, 2).merge().setValue("—").setBackground("#FFF9C4").setHorizontalAlignment("center");
     ws.getRange(row, 5).setValue("SEMAFORO_VAL").setFontColor(C.WHITE); row++; // Marcador en fila 4
-    
+
     ws.getRange(row, 1).setValue("Actualización:").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold");
     ws.getRange(row, 2).setValue("(pendiente)").setFontSize(9).setFontColor(C.GRAY);
     ws.getRange(row, 5).setValue("DASH_FECHA").setFontColor(C.WHITE);
@@ -309,7 +309,7 @@ function formatearDashboard(ws) {
 
     var op = "'📈 Operaciones'!";
     var rStart = row;
-    
+
     // Definimos los nombres de las métricas y sus fórmulas dinámicamente
     var mDef = [
         { label: "Capital inicial del mes ($)", formula: "=" + op + "B2", note: "El capital con el que empezaste (celda B2 en Ops)" },
@@ -330,14 +330,14 @@ function formatearDashboard(ws) {
         var kbg = k % 2 === 0 ? C.LIGHT : C.WHITE;
         var rActual = row;
         ws.getRange(rActual, 1).setValue(mDef[k].label).setBackground(kbg).setFontWeight("bold");
-        
+
         var formula = mDef[k].formula.replace(/{r-(\d+)}/g, function(_, offset) {
             return rActual - parseInt(offset);
         });
 
         var valCell = ws.getRange(rActual, 2, 1, 2).merge();
         valCell.setFormula(formula).setBackground("#E3F2FD").setHorizontalAlignment("center").setFontWeight("bold");
-        
+
         // Formatos
         if (k === 0 || k === 1 || k === 2 || (k >= 8 && k <= 10)) valCell.setNumberFormat('"$"#,##0.00');
         else if (k === 3 || k === 7) valCell.setNumberFormat('0.00%');
@@ -429,7 +429,7 @@ function formatearHojaSemana(ws) {
     ws.clearFormats();
     ws.getRange(1, 1, ws.getMaxRows(), ws.getMaxColumns()).setDataValidation(null);
 
-    var nCols = 42; 
+    var nCols = 42;
     ws.getRange(1, 1, 1, nCols).merge()
         .setValue("🎯  SEMANA TRACKER — Seguimiento de Candidatas Elegidas")
         .setBackground(C.DARK).setFontColor(C.GREEN).setFontSize(14)
@@ -446,11 +446,11 @@ function formatearHojaSemana(ws) {
     ws.setRowHeight(3, 20);
 
     var hdrs = [
-        "Ticker", "Empresa", "Sector", "Fecha Ent.", "Track", "Entrada $", "Stop $", "Target $", 
+        "Ticker", "Empresa", "Sector", "Fecha Ent.", "Track", "Entrada $", "Stop $", "Target $",
         "Tgt Min 2x", "R/R Actual", "Perf Sem%", "Perf Mes%", "MTM/Filtros"
     ];
     var wCols = [70, 160, 110, 85, 50, 78, 72, 78, 80, 65, 78, 78, 180];
-    
+
     for (var i = 0; i < hdrs.length; i++) {
         ws.getRange(5, i + 1).setValue(hdrs[i])
             .setBackground(C.DARK).setFontColor(C.WHITE)
@@ -486,7 +486,7 @@ function formatearHojaSemana(ws) {
     // Filas de datos (Hasta MAX_CAND para histórico)
     var range = ws.getRange(6, 1, MAX_CAND, nCols);
     range.setFontSize(9).setVerticalAlignment("middle");
-    
+
     // Aplicar alternancia de colores eficiente
     for (var r = 0; r < MAX_CAND; r++) {
         var rowNum = 6 + r;
@@ -494,7 +494,7 @@ function formatearHojaSemana(ws) {
         ws.getRange(rowNum, 1, 1, nCols).setBackground(bg);
         ws.getRange(rowNum, 1).setFontWeight("bold").setHorizontalAlignment("center");
         ws.getRange(rowNum, 5).setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build()).setHorizontalAlignment("center");
-        
+
         // Fórmulas R/R y Tgt 2x (F=6, G=7)
         var E = "F" + rowNum; var S_ = "G" + rowNum;
         ws.getRange(rowNum, 9).setFormula('=IF(OR(' + E + '="";' + S_ + '="");"";' + E + '+2*(' + E + '-' + S_ + '))').setNumberFormat('"$"#,##0.00');
@@ -590,16 +590,16 @@ function formatearHojaReporte(ws) {
     ws.clear();
     ws.clearContents();
     ws.clearFormats();
-    
+
     ws.setColumnWidth(1, 100); // Fecha (en tabla detalle) / Aprendizaje (en resumen)
     ws.setColumnWidth(2, 100); // Ticker / Resultado
     ws.setColumnWidth(3, 100); // Score / Significado (pero el resumen ocupa 1-3)
-    
+
     // El resumen ocupa columnas 1 a 3. Ajustamos anchos para el resumen arriba:
     ws.setColumnWidth(1, 230); // Aprendizaje
     ws.setColumnWidth(2, 200); // Resultado
     ws.setColumnWidth(3, 400); // Significado
-    
+
     ws.setColumnWidth(4, 250); // Filtros
     ws.setColumnWidth(5, 80);  // P. Inicio
     ws.setColumnWidth(6, 80);  // P. Fin
@@ -615,12 +615,12 @@ function formatearHojaReporte(ws) {
 
     ws.getRange(2, 1, 1, 9).merge().setValue("Resumen basado en el seguimiento histórico del Score Log")
         .setBackground(C.ACCENT).setFontColor(C.WHITE).setFontSize(9).setHorizontalAlignment("center");
-    
+
     // --- TABLA DE APRENDIZAJE (RESUMEN) ---
     var summaryHeaders = [["Aprendizaje", "Resultado", "¿Qué significa para tu sistema?"]];
     ws.getRange(4, 1, 1, 3).setValues(summaryHeaders)
         .setBackground(C.MID).setFontColor(C.GREEN).setFontWeight("bold").setHorizontalAlignment("center");
-    
+
     // Formatear filas de aprendizaje (espacio para 9 items)
     ws.getRange(5, 1, 9, 3).setBackground(C.WHITE).setFontSize(9).setVerticalAlignment("middle");
     ws.getRange(5, 1, 9, 1).setFontWeight("bold").setBackground(C.LIGHT);
@@ -631,7 +631,7 @@ function formatearHojaReporte(ws) {
     ws.getRange(17, 1, 1, 9).setValues([headers])
         .setBackground(C.DARK).setFontColor(C.WHITE).setFontWeight("bold")
         .setHorizontalAlignment("center").setVerticalAlignment("middle");
-    
+
     ws.setRowHeight(17, 30);
     ws.setFrozenRows(17);
 }

@@ -128,7 +128,7 @@ function onEdit(e) {
                 }
             }
         }
-        
+
         if (numRows * numCols < 5) {
             ss.toast("Autocompletado procesado", "✅", 2);
         } else {
@@ -165,14 +165,14 @@ function desinstalarTriggers() {
  */
 function programarSiguienteCheck() {
     eliminarTriggersPrecios(); // Evita duplicados
-    
+
     var info = getInfoTiempoNY();
     var now = info.fecha;
     var hora = info.hora;
     var diaSem = info.diaSemana; // 0=Dom, 1=Lun, ..., 5=Vie, 6=Sab
-    
+
     // Horas de captura: 10, 11, 13, 14, 15
-    var slots = HORAS_CHECK; 
+    var slots = HORAS_CHECK;
     var nextSlot = null;
     var nextDate = new Date(now.getTime());
     nextDate.setMinutes(0, 0, 0);
@@ -191,7 +191,7 @@ function programarSiguienteCheck() {
     } else {
         // No hay más slots hoy, o es fin de semana. Buscar el próximo día laboral a las 10 AM.
         nextDate.setHours(slots[0]); // 10 AM
-        
+
         do {
             nextDate.setDate(nextDate.getDate() + 1);
         } while (nextDate.getDay() === 0 || nextDate.getDay() === 6); // Saltar Sab y Dom
@@ -201,7 +201,7 @@ function programarSiguienteCheck() {
         .timeBased()
         .at(nextDate)
         .create();
-        
+
     Logger.log("Siguiente captura programada para: " + nextDate.toString());
 }
 
@@ -243,7 +243,7 @@ function registrarPreciosTrigger() {
     if (slotActual === null) return;
     if (yaRegistradoHoy(slotActual)) return;
 
-    registrarPrecios(slotActual, false); 
+    registrarPrecios(slotActual, false);
 }
 
 /**

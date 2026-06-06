@@ -275,14 +275,9 @@ function escribirBloqueVerif(ws, titulo, bgTitulo, fgTitulo, items, row) {
  */
 function registrarPreciosManual() {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var now = new Date();
-    var etHour = obtenerHoraETNow();
-    var etMinutes = now.getUTCMinutes();
+    var currentTime = obtenerHoraETNow(); // Esto ya trae hora + (minutos/60)
     
-    // Convertimos el tiempo actual a un valor decimal (ej: 10:48 -> 10.8)
-    // para encontrar el slot de HORAS_CHECK más cercano.
-    var currentTime = etHour + (etMinutes / 60);
-    
+    // Buscar el slot de HORAS_CHECK más cercano
     var mejorHora = HORAS_CHECK[0];
     var minDiff = 24;
     for (var i = 0; i < HORAS_CHECK.length; i++) {
@@ -293,8 +288,11 @@ function registrarPreciosManual() {
         }
     }
 
-    var displayHora = mejorHora > 12 ? (mejorHora - 12) + " PM" : mejorHora + " AM";
-    ss.toast("Hora detectada: " + etHour + ":" + (etMinutes < 10 ? "0" : "") + etMinutes + " ET. Registrando para bloque " + displayHora, "⏳ Registro Manual", 6);
+    var h = Math.floor(mejorHora);
+    var m = (mejorHora - h) * 60;
+    var displayHora = h + ":" + (m === 0 ? "00" : m);
+    
+    ss.toast("Detectado: Bloque " + displayHora + " ET. Registrando...", "⏳ Registro Manual", 6);
     
     registrarPrecios(mejorHora, true);
 }

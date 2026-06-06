@@ -18,10 +18,10 @@ function configurarSemanaTracker() {
     if (!ws) ws = ss.insertSheet(SEMANA_SHEET);
     formatearHojaSemana(ws);
 
-    var log = ss.getSheetByName(PRICE_LOG);
+    var log = ss.getSheetByName(LOG_SHEET);
     if (!log) { 
-        log = ss.insertSheet(PRICE_LOG); 
-        formatearPriceLog(log); 
+        log = ss.insertSheet(LOG_SHEET); 
+        formatearScoreLog(log); 
     }
 
     ss.toast("Semana Tracker listo.", "🎯 Semana Tracker", 8);
@@ -29,74 +29,218 @@ function configurarSemanaTracker() {
 }
 
 /**
- * Registra los precios actuales para las candidatas activas.
+ * Registra los precios y scores actuales en el Score Log.
+ * Implementa la lógica secuencial: 10am crea fila y consulta Finviz, resto solo actualiza precio.
  */
 function registrarPrecios(horaET, esManual) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var ws = ss.getSheetByName(SEMANA_SHEET);
-    if (!ws || ws.getLastRow() < 6) return;
-
-    var datos = ws.getRange(6, 1, MAX_CAND, 8).getValues();
-    var activas = [];
-    for (var i = 0; i < datos.length; i++) {
-        var tk = String(datos[i][0]).trim().toUpperCase();
-        // Cambiado de === true a == true para mayor flexibilidad
-        if (tk && datos[i][4] == true) { 
-            activas.push({
-                ticker: tk,
-                row: 6 + i,
-                entrada: parseFloat(datos[i][5]) || 0,
-                stop: parseFloat(datos[i][6]) || 0,
-                target: parseFloat(datos[i][7]) || 0
-            });
-        }
-    }
-
-    if (activas.length === 0) {
-        ss.toast("No se encontraron tickers con el check 'Track' activado.", "⚠️", 5);
+    if (!ws || ws.getLastRow() < 6) {
+        if (esManual) ss.toast("No hay datos en la hoja de Semana para registrar.", "⚠️", 5);
         return;
     }
+
+    // 1. Obtener TODOS los tickers de la hoja Tracker
+    var todos = obtenerTickersTrackeados();
+    var listaCompleta = Object.keys(todos);
     
-    ss.toast("Procesando " + activas.length + " tickers activos...", "⏳", 4);
-
-    var log = ss.getSheetByName(PRICE_LOG);
-    if (!log) { 
-        log = ss.insertSheet(PRICE_LOG); 
-        formatearPriceLog(log); 
+    if (listaCompleta.length === 0) {
+        if (esManual) ss.toast("No se encontraron tickers para registrar.", "⚠️", 5);
+        return;
     }
 
-    var now = new Date();
-    var checkNum = HORAS_CHECK.indexOf(horaET) + 1;
-    var dias = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-    var diaNom = dias[now.getDay()];
-    var esFinde = (diaNom === "Sáb" || diaNom === "Dom");
-    var diaNomEfectivo = (esFinde && esManual) ? "Lun" : diaNom;
+    var log = ss.getSheetByName(LOG_SHEET);
+    if (!log) {
+        log = ss.insertSheet(LOG_SHEET);
+        formatearScoreLog(log);
+    }
 
-    var filas = [];
-    for (var ti = 0; ti < activas.length; ti++) {
-        var precio = fetchPrecioYahoo(activas[ti].ticker);
-        if (precio !== null) {
-            activas[ti].precioActual = precio; // Guardamos para el reporte
-            filas.push([now, activas[ti].ticker, horaET, checkNum, diaNomEfectivo, precio]);
-            actualizarCeldaSemana(ws, activas[ti], diaNomEfectivo, checkNum, precio, esManual);
-        } else {
-            // Fallback para evitar error si Yahoo falla
-            activas[ti].precioActual = activas[ti].entrada; 
+    var info = getInfoTiempoNY();
+    var fechaHoy = new Date(info.fecha.getFullYear(), info.fecha.getMonth(), info.fecha.getDate());
+    var fechaHoyStr = Utilities.formatDate(fechaHoy, "GMT", "yyyy-MM-dd");
+    
+    // DETERMINAR SI ES EL PRIMER REGISTRO DEL DÍA
+    var logRows = log.getLastRow();
+    var isFirstOfDay = true;
+    if (logRows >= 2) {
+        var lastFecha = log.getRange(logRows, 1).getValue();
+        var lastFechaStr = (lastFecha instanceof Date) ? Utilities.formatDate(lastFecha, "GMT", "yyyy-MM-dd") : "";
+        if (lastFechaStr === fechaHoyStr) isFirstOfDay = false;
+    }
+
+    var is10AM = (horaET === 10);
+    var colPrecio = obtenerColumnaPrecio(horaET);
+    
+    // --- CASO A: PRIMERA CAPTURA O 10 AM (SNAPSHOT COMPLETO) ---
+    if (isFirstOfDay || is10AM) {
+        ss.toast("📸 Generando snapshot diario (" + listaCompleta.length + " tickers)...", "📊 Score Log", 4);
+        var scoreData = calcularScoreDiarioParaTickers(listaCompleta);
+        var nuevasFilas = [];
+        
+        for (var i = 0; i < listaCompleta.length; i++) {
+            var tk = listaCompleta[i];
+            var precio = fetchPrecioYahoo(tk);
+            var sd = scoreData[tk] || { score: 0, filtros: "" };
+            
+            // Construir fila (FECHA, TICKER, P. 10AM, SCORE, FILTROS, P. 11AM, P. 1PM, P. 2:30PM, P. 3:45PM, TRACKER?)
+            var fila = [fechaHoy, tk, "", sd.score, sd.filtros, "", "", "", "", todos[tk].isTracked ? "SÍ" : "NO"];
+            // Si la captura es de una hora específica, poner el precio en su sitio
+            if (colPrecio >= 3 && colPrecio <= 9) {
+                fila[colPrecio - 1] = precio;
+            } else {
+                fila[2] = precio; // Default 10am
+            }
+            
+            nuevasFilas.push(fila);
+            
+            // Actualizar visual en Tracker (solo si está trackeado o es la hora justa)
+            if (todos[tk].isTracked || is10AM) {
+                actualizarCeldaSemana(ws, todos[tk], info.diaSemanaStr, horaET, precio);
+            }
         }
-        Utilities.sleep(600);
+        
+        if (nuevasFilas.length > 0) {
+            log.getRange(log.getLastRow() + 1, 1, nuevasFilas.length, 10).setValues(nuevasFilas);
+            if (esManual) log.activate();
+        }
+        ss.toast("Snapshot completado.", "✅", 5);
+
+    } else {
+        // --- CASO B: ACTUALIZACIÓN INCREMENTAL (SOLO TRACKED) ---
+        var logRange = logRows >= 2 ? log.getRange(2, 1, logRows - 1, 10) : null;
+        var logData = logRange ? logRange.getValues() : [];
+        var updCount = 0;
+        
+        ss.toast("Actualizando activos...", "⏳", 3);
+
+        for (var j = 0; j < listaCompleta.length; j++) {
+            var ticker = listaCompleta[j];
+            if (!todos[ticker].isTracked) continue; 
+
+            var precioAct = fetchPrecioYahoo(ticker);
+            if (precioAct === null) continue;
+
+            var filaEncontrada = -1;
+            for (var r = logData.length - 1; r >= 0; r--) {
+                var fRowStr = (logData[r][0] instanceof Date) ? Utilities.formatDate(logData[r][0], "GMT", "yyyy-MM-dd") : "";
+                if (fRowStr === fechaHoyStr && String(logData[r][1]).toUpperCase() === ticker) {
+                    filaEncontrada = r + 2;
+                    break;
+                }
+            }
+
+            if (filaEncontrada !== -1) {
+                log.getRange(filaEncontrada, colPrecio).setValue(precioAct);
+                updCount++;
+            } else {
+                // Fallback extremo: si no existe y es tracked, la agregamos
+                var sd = { score: 0, filtros: "" }; 
+                var nuevaFila = [fechaHoy, ticker, "", 0, "", "", "", "", "", "SÍ"];
+                log.appendRow(nuevaFila);
+                log.getRange(log.getLastRow(), colPrecio).setValue(precioAct);
+            }
+            
+            actualizarCeldaSemana(ws, todos[ticker], info.diaSemanaStr, horaET, precioAct);
+        }
+        ss.toast(updCount + " registros actualizados.", "📊 Score Log", 5);
     }
 
-    if (filas.length > 0) {
-        var nextRow = log.getLastRow() + 1;
-        log.getRange(nextRow, 1, filas.length, 6).setValues(filas);
-        log.getRange(nextRow, 1, filas.length, 1).setNumberFormat("dd/mm/yyyy hh:mm");
-        log.getRange(nextRow, 6, filas.length, 1).setNumberFormat('"$"#,##0.00');
+    // WHATSAPP: Solo para los que tienen Check
+    var activasParaReporte = Object.values(todos).filter(function(t) { return t.isTracked; });
+    if (activasParaReporte.length > 0) {
+        // Asegurar precio actual para el resumen
+        activasParaReporte.forEach(function(t) { 
+            if (!t.precioActual) t.precioActual = fetchPrecioYahoo(t.ticker); 
+        });
+        enviarResumenWhatsApp(activasParaReporte);
     }
+}
 
-    ss.toast("Precios registrados para " + activas.length + " tickers.", "📊 Precios", 5);
+/**
+ * Actualiza una celda específica en la hoja del Tracker Semanal basada en la hora ET.
+ */
+function actualizarCeldaSemana(ws, cand, diaNomStr, horaET, precio) {
+    var diasMap = { "LUNES": 1, "MARTES": 2, "MIÉRCOLES": 3, "JUEVES": 4, "VIERNES": 5 };
+    var d = diasMap[diaNomStr.toUpperCase()];
+    if (!d) return;
 
-    // NUEVO: Enviar resumen por WhatsApp automáticamente si está configurado
-    enviarResumenWhatsApp(activas);
+    var checkNum = HORAS_CHECK.indexOf(horaET) + 1;
+    if (checkNum === 0) return;
+
+    var col = COL_PRECIOS_INI + (d - 1) * 5 + (checkNum - 1);
+    var cell = ws.getRange(cand.row, col);
+
+    var precioNum = Number(precio);
+    if (isNaN(precioNum) || precioNum <= 0) return;
+
+    cell.setValue(precioNum).setNumberFormat('"$"#,##0.00').setFontSize(8).setHorizontalAlignment("center");
+
+    // Formato condicional básico vs Entrada
+    if (cand.entrada > 0) {
+        if (precioNum >= cand.entrada * 1.05) cell.setBackground("#E8F5E9").setFontColor("#1B5E20").setFontWeight("bold");
+        else if (precioNum <= cand.entrada * 0.96) cell.setBackground("#FFEBEE").setFontColor("#B71C1C").setFontWeight("bold");
+    }
+}
+
+/**
+ * Determina qué columna del Score Log corresponde a cada hora.
+ */
+function obtenerColumnaPrecio(horaET) {
+    if (horaET === 10) return 3;
+    if (horaET === 11) return 6;
+    if (horaET === 13) return 7;
+    if (horaET === 14.5) return 8;
+    if (horaET === 15.75) return 9;
+    return 3;
+}
+
+/**
+ * Formatea la nueva hoja de Score Log.
+ */
+function formatearScoreLog(ws) {
+    var headers = [["FECHA", "TICKER", "P. 10AM", "SCORE", "FILTROS", "P. 11AM", "P. 1PM", "P. 2:30PM", "P. 3:45PM", "TRACKER?"]];
+    ws.getRange(1, 1, 1, 10).setValues(headers)
+      .setBackground("#1A1A2E").setFontColor("white").setFontWeight("bold").setHorizontalAlignment("center");
+    ws.setFrozenRows(1);
+    ws.setColumnWidth(1, 90);
+    ws.setColumnWidth(5, 250);
+}
+
+/**
+ * Consulta Finviz solo para los filtros Tier 1 y 2 para calcular el score de los tickers activos.
+ */
+function calcularScoreDiarioParaTickers(listaTickers) {
+    var resultados = {};
+    listaTickers.forEach(function(tk) { resultados[tk] = { score: 0, filtros: [] }; });
+
+    TIER_10AM.forEach(function(fKey) {
+        var filtro = FILTROS.find(function(f) { return f.key === fKey; });
+        if (!filtro) return;
+
+        try {
+            var html = fetchFinviz(filtro.baseUrl);
+            if (!html) return;
+            var tickersEnFiltro = parsearV111(html, 100).map(function(a) { return a.ticker; });
+            
+            var pts = TIER_SCORES[fKey] ? TIER_SCORES[fKey].pts : 1;
+            var label = TIER_SCORES[fKey] ? TIER_SCORES[fKey].label : fKey;
+
+            listaTickers.forEach(function(tk) {
+                if (tickersEnFiltro.indexOf(tk) >= 0) {
+                    resultados[tk].score += pts;
+                    resultados[tk].filtros.push(label);
+                }
+            });
+            Utilities.sleep(800);
+        } catch(e) { Logger.log("Error score 10am: " + e.message); }
+    });
+
+    // Limpiar etiquetas de filtros
+    listaTickers.forEach(function(tk) {
+        resultados[tk].filtros = resultados[tk].filtros.join(", ");
+    });
+
+    return resultados;
 }
 
 function enviarResumenWhatsApp(activas) {
@@ -156,115 +300,227 @@ function enviarResumenWhatsApp(activas) {
     }
 }
 
+
 /**
- * Actualiza una celda específica en la hoja del Tracker Semanal.
+ * Generar el reporte consolidado del viernes leyendo del Score Log y comparando con los objetivos del Tracker.
  */
-function actualizarCeldaSemana(ws, cand, diaNom, checkNum, precio, esManual) {
-    var mapDia = { "Lun": 1, "Mar": 2, "Mié": 3, "Jue": 4, "Vie": 5 };
-    var d = mapDia[diaNom];
-    if (!d) return;
-    var col = COL_PRECIOS_INI + (d - 1) * 5 + (checkNum - 1);
-    var cell = ws.getRange(cand.row, col);
-
-    if (!esManual) {
-        var existing = cell.getValue();
-        if (existing !== "" && existing !== 0 && existing !== null) return;
-    }
-
-    var precioNum = Number(precio);
-    if (isNaN(precioNum)) return;
-
-    cell.setValue(precioNum).setNumberFormat('"$"#,##0.00').setFontSize(9).setHorizontalAlignment("center");
-
-    if (cand.entrada > 0) {
-        if (cand.target > 0 && precioNum >= cand.target) {
-            cell.setBackground("#1B5E20").setFontColor("#FFFFFF").setFontWeight("bold");
-        } else if (cand.stop > 0 && precioNum <= cand.stop) {
-            cell.setBackground("#B71C1C").setFontColor("#FFFFFF").setFontWeight("bold");
-        } else if (precioNum > cand.entrada) {
-            cell.setBackground("#E8F5E9").setFontColor("#1B5E20");
-        } else {
-            cell.setBackground("#FFEBEE").setFontColor("#B71C1C");
-        }
-    }
-}
-
 /**
- * Genera el reporte consolidado del viernes.
+ * Generar el reporte consolidado del viernes leyendo del Score Log y comparando con los objetivos del Tracker.
  */
 function generarReporteViernes() {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var ws = ss.getSheetByName(SEMANA_SHEET);
-    var log = ss.getSheetByName(PRICE_LOG);
-
-    if (!ws || !log || log.getLastRow() < 3) {
-        ss.toast("Sin datos suficientes en el Price Log para generar el reporte.", "⚠️", 5);
+    var log = ss.getSheetByName(LOG_SHEET);
+    if (!log || log.getLastRow() < 2) {
+        ss.toast("No hay datos en el Score Log para generar el reporte.", "⚠️", 5);
         return;
     }
 
-    var ranking = generarRankingParaHistorial();
-    if (!ranking || ranking.length === 0) {
-        ss.toast("No hay tickers activos con precios registrados para procesar.", "⚠️", 5);
+    // 1. Obtener contexto de trades desde el Tracker (Entrada, Stop, Target)
+    var todos = obtenerTickersTrackeados();
+    
+    // 2. Definir rango de la semana actual (Lunes a Viernes)
+    var info = getInfoTiempoNY();
+    var now = info.fecha;
+    var day = now.getDay();
+    var diff = now.getDate() - day + (day === 0 ? -6 : 1); // Lunes
+    var lunes = new Date(now.setDate(diff));
+    lunes.setHours(0,0,0,0);
+    var viernes = new Date(lunes.getTime() + 4 * 24 * 60 * 60 * 1000);
+    viernes.setHours(23,59,59,999);
+
+    var logData = log.getRange(2, 1, log.getLastRow() - 1, 10).getValues();
+    var stats = {}; // Ticker -> { ticker, inicio, fin, pMax, pMin, sumScore, countScore, filtros: Set, entries: [] }
+
+    // 3. Agrupar datos del Log por Ticker para la semana actual
+    for (var i = 0; i < logData.length; i++) {
+        var fecha = new Date(logData[i][0]);
+        if (fecha >= lunes && fecha <= viernes) {
+            var tk = logData[i][1];
+            
+            // Solo procesar si está trackeado (según solicitud del usuario)
+            if (!todos[tk] || !todos[tk].isTracked) continue;
+
+            if (!stats[tk]) {
+                var infoT = todos[tk];
+                stats[tk] = { 
+                    ticker: tk, 
+                    inicio: infoT.entrada || null, 
+                    fin: null, 
+                    pMax: 0,
+                    pMin: 999999,
+                    sumScore: 0, 
+                    countScore: 0, 
+                    filtros: new Set(),
+                    fechaRef: fecha,
+                    entries: [],
+                    rr: infoT.entrada > 0 && infoT.stop > 0 ? (infoT.target - infoT.entrada) / (infoT.entrada - infoT.stop) : 0,
+                    target: infoT.target,
+                    stop: infoT.stop
+                };
+            }
+            
+            // Consolidar Score y Filtros
+            var scoreRow = parseFloat(logData[i][3]) || 0;
+            var filtrosRow = String(logData[i][4] || "");
+            if (scoreRow > 0) {
+                stats[tk].sumScore += scoreRow;
+                stats[tk].countScore++;
+                filtrosRow.split(",").forEach(function(f) { if(f.trim()) stats[tk].filtros.add(f.trim()); });
+            }
+
+            // Capturar precios del día
+            var dailyPrices = [];
+            var priceIndices = [2, 5, 6, 7, 8];
+            for (var pi = 0; pi < priceIndices.length; pi++) {
+                var p = parseFloat(logData[i][priceIndices[pi]]);
+                dailyPrices.push(p > 0 ? p : null);
+                if (p > 0) {
+                    if (stats[tk].inicio === null) stats[tk].inicio = p;
+                    stats[tk].fin = p;
+                    if (p > stats[tk].pMax) stats[tk].pMax = p;
+                    if (p < stats[tk].pMin) stats[tk].pMin = p;
+                }
+            }
+            stats[tk].entries.push({ fecha: fecha, prices: dailyPrices });
+        }
+    }
+
+    var ranking = Object.values(stats);
+    if (ranking.length === 0) {
+        ss.toast("No hay acciones con 'Check' registradas esta semana.", "⚠️", 5);
         return;
     }
 
+    // 4. Lógica de Negocio y Métricas
+    var totalChecks = 0;
+    var winnersCount = 0;
+    var dayMinMap = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }; // L-V
+    var rrBajo = [];
+    var rrAlto = [];
+    var hitTargetList = [];
+    var hitStopList = [];
+
+    ranking.forEach(function(s) {
+        // Ordenar entradas cronológicamente
+        s.entries.sort(function(a, b) { return a.fecha - b.fecha; });
+        
+        var hitTarget = false;
+        var hitStop = false;
+        var finished = false;
+        var minPrice = 999999;
+        var dayOfMin = -1;
+
+        s.entries.forEach(function(entry) {
+            var d = entry.fecha.getDay();
+            entry.prices.forEach(function(p) {
+                if (p > 0) {
+                    totalChecks++;
+                    if (p < minPrice) { minPrice = p; dayOfMin = d; }
+                    
+                    if (!finished) {
+                        if (s.target > 0 && p >= s.target) { hitTarget = true; finished = true; }
+                        else if (s.stop > 0 && p <= s.stop) { hitStop = true; finished = true; }
+                    }
+                }
+            });
+        });
+
+        if (dayOfMin >= 1 && dayOfMin <= 5) dayMinMap[dayOfMin]++;
+        if (hitTarget) { winnersCount++; hitTargetList.push(s.ticker); }
+        if (hitStop) hitStopList.push(s.ticker);
+        
+        if (s.rr >= 2) rrAlto.push(s.ticker);
+        else rrBajo.push(s.ticker);
+
+        s.hitTarget = hitTarget;
+        s.hitStop = hitStop;
+        s.pnlFinal = s.inicio > 0 ? (s.fin - s.inicio) / s.inicio : 0;
+        s.pnlPct = s.pnlFinal; // Asegurar compatibilidad con actualizarResumenSemana
+        s.pnlMax = s.inicio > 0 ? (s.pMax - s.inicio) / s.inicio : 0;
+    });
+
+    // Determinar mejor día global
+    var diasNombres = ["", "Lun", "Mar", "Mie", "Jue", "Vie"];
+    var mejorDiaIdx = 1;
+    for (var dIdx = 2; dIdx <= 5; dIdx++) {
+        if (dayMinMap[dIdx] > dayMinMap[mejorDiaIdx]) mejorDiaIdx = dIdx;
+    }
+    var mejorDiaStr = diasNombres[mejorDiaIdx] + " — precios más bajos en " + dayMinMap[mejorDiaIdx] + " candidatas";
+
+    // Ordenar ranking para Mejor/Peor
+    ranking.sort(function(a, b) { return b.pnlFinal - a.pnlFinal; });
+    var mejor = ranking[0];
+    var peor = ranking[ranking.length - 1];
+
+    // 5. Preparar filas de APRENDIZAJE
+    var filasAprendizaje = [
+        ["🏆 Mejor candidata de la semana", mejor.ticker + " → " + (mejor.pnlFinal * 100).toFixed(2) + "%", "¿Tenía R/R ≥ 2x y 3+ filtros Finviz? Si sí, es el setup ideal que buscas cada semana."],
+        ["💀 Peor candidata de la semana", peor.ticker + " → " + (peor.pnlFinal * 100).toFixed(2) + "%", "¿Tenía R/R bajo o pocos filtros? Una pérdida con stop controlado es mejor que aguantar."],
+        ["✅ En ganancia", winnersCount + " de " + ranking.length, "Si > 50%, selección buena. Si < 40%, revisar criterios de entrada de la semana siguiente."],
+        ["⚠️ Candidatas con R/R < 2x (no debían entrar)", rrBajo.length > 0 ? rrBajo.join(", ") : "Ninguna", "El sistema dice no entrar, pero se trackea para aprender. Si subieron, observa si fue por suerte o por un catalizador que no tenías en cuenta."],
+        ["📐 Candidatas con R/R ≥ 2x (sí podían entrar)", rrAlto.length > 0 ? rrAlto.join(", ") : "Ninguna", "Estas sí cumplían la regla. Compara su resultado con las de R/R < 2x — la diferencia a largo plazo justifica la disciplina."],
+        ["🎯 Tocaron el target", hitTargetList.length > 0 ? hitTargetList.join(", ") : "Ninguna", "¿Eran las de mejor R/R y más filtros? La calidad del setup debe correlacionar con alcanzar el target."],
+        ["🛑 Tocaron el stop", hitStopList.length > 0 ? hitStopList.join(", ") : "Ninguna", "Pérdidas controladas. ¿El stop era técnico (bajo soporte) o arbitrario?"],
+        ["📅 Mejor día global para entrar", mejorDiaStr, "Si aparece consistente en 3-4 semanas, ese día es tu ventana de entrada natural en el mercado."],
+        ["📊 Checks registrados promedio", (totalChecks / ranking.length).toFixed(1) + " de 25 posibles", "25 checks/semana = 5 días × 5 horas. A más semanas acumuladas, mejor identificas el patrón intraday."]
+    ];
+
+    // 6. Preparar filas de TABLA DETALLADA
+    var filasReporte = ranking.map(function(s) {
+        var scoreProm = s.countScore > 0 ? (s.sumScore / s.countScore) : 0;
+        var estatus = "—";
+        if (s.hitTarget) estatus = "🎯 TARGET HIT";
+        else if (s.hitStop) estatus = "🛑 STOP HIT";
+        else if (s.pnlFinal > 0) estatus = "📈 PROFIT";
+        else if (s.pnlFinal < 0) estatus = "📉 LOSS";
+
+        return [
+            s.fechaRef,
+            s.ticker,
+            scoreProm.toFixed(1),
+            Array.from(s.filtros).join(", "),
+            s.inicio,
+            s.fin,
+            s.pMax, // Usamos pMax en la columna 7 (PnL Max) antes del PnL Final
+            s.pnlFinal,
+            estatus
+        ];
+    });
+
+    // 7. ESCRIBIR EN LA HOJA
     var wsRep = ss.getSheetByName(REPORT_SHEET);
     if (!wsRep) wsRep = ss.insertSheet(REPORT_SHEET);
     formatearHojaReporte(wsRep);
 
-    // --- CÁLCULO DE MÉTRICAS DE RESUMEN ---
-    var total = ranking.length;
-    var ganadoras = ranking.filter(function(r) { return r.pnlPct > 0; }).length;
-    var wr = total > 0 ? (ganadoras / total) : 0;
-    var pnlProm = ranking.reduce(function(a, b) { return a + b.pnlPct; }, 0) / total;
-    var mejor = ranking[0].ticker + " (" + (ranking[0].pnlPct * 100).toFixed(1) + "%)";
-
-    wsRep.getRange(5, 2).setValue(total);
-    wsRep.getRange(5, 3).setValue(wr).setNumberFormat("0%");
-    wsRep.getRange(5, 4).setValue(pnlProm).setNumberFormat("+0.00%;-0.00%");
-    wsRep.getRange(5, 5).setValue(mejor);
-
-    // --- LLENADO DE TABLA ---
-    var filas = [];
-    for (var i = 0; i < ranking.length; i++) {
-        var r = ranking[i];
-        var estatus = r.hitTarget ? "🎯 TARGET" : (r.hitStop ? "🛑 STOP" : "⏳ ACTIVO");
-        
-        filas.push([
-            i + 1,
-            r.ticker,
-            r.empresa,
-            r.filtrosStr,
-            r.scoreMTM,
-            r.entrada,
-            r.pVie,
-            r.pnlPct,
-            estatus,
-            r.tend
-        ]);
-    }
-
-    var dataRange = wsRep.getRange(8, 1, filas.length, 10);
-    dataRange.setValues(filas).setFontSize(9).setVerticalAlignment("middle").setHorizontalAlignment("center");
+    // Escribir Aprendizaje (Filas 5 a 13)
+    wsRep.getRange(5, 1, filasAprendizaje.length, 3).setValues(filasAprendizaje);
     
-    // Formatos condicionales y colores
-    for (var row = 0; row < filas.length; row++) {
-        var pnlCell = wsRep.getRange(8 + row, 8);
-        var estCell = wsRep.getRange(8 + row, 9);
-        var pVal = filas[row][7];
+    // Escribir Detalle (Fila 18 en adelante)
+    var startRow = 18;
+    if (filasReporte.length > 0) {
+        wsRep.getRange(startRow, 1, filasReporte.length, 9).setValues(filasReporte);
         
-        pnlCell.setNumberFormat("+0.00%;-0.00%").setFontWeight("bold").setFontColor(pVal >= 0 ? C.GREEN : C.RED);
-        
-        var estVal = filas[row][8];
-        if (estVal === "🎯 TARGET") estCell.setBackground("#1B5E20").setFontColor("#FFFFFF").setFontWeight("bold");
-        if (estVal === "🛑 STOP") estCell.setBackground("#B71C1C").setFontColor("#FFFFFF").setFontWeight("bold");
-        
-        wsRep.setRowHeight(8 + row, 22);
+        // Formatos Detalle
+        for (var r = 0; r < filasReporte.length; r++) {
+            var row = startRow + r;
+            wsRep.getRange(row, 1).setNumberFormat("dd/mm/yyyy");
+            wsRep.getRange(row, 5, 1, 3).setNumberFormat('"$"#,##0.00');
+            wsRep.getRange(row, 8).setNumberFormat("+0.00%;-0.00%").setFontWeight("bold").setFontColor(filasReporte[r][7] >= 0 ? C.GREEN : C.RED);
+            
+            var statusCell = wsRep.getRange(row, 9);
+            if (filasReporte[r][8].indexOf("TARGET") >= 0) statusCell.setBackground(C.LGREEN).setFontColor(C.GREEN).setFontWeight("bold");
+            else if (filasReporte[r][8].indexOf("STOP") >= 0) statusCell.setBackground("#FFEBEE").setFontColor(C.RED).setFontWeight("bold");
+            wsRep.setRowHeight(row, 22);
+        }
     }
+
+    // 8. Actualizar Tracker Semanal Visualmente
+    actualizarResumenSemana(ranking);
 
     wsRep.activate();
-    ss.toast("Reporte de rendimiento generado con éxito.", "✅", 5);
+    ss.toast("Reporte semanal generado con éxito.", "✅", 5);
 }
+
 
 
 /**
@@ -277,36 +533,34 @@ function testWhatsApp() {
 
 /**
  * Resetea los datos para una nueva semana de trading.
+ * En esta versión PRO-LOG, NO se borra el Score Log.
  */
 function resetearSemana() {
     var ui = SpreadsheetApp.getUi();
     var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    var resp = ui.alert("🔄 Reset Semanal", "¿Confirmas el reset para la próxima semana?", ui.ButtonSet.YES_NO);
+    var resp = ui.alert("🔄 Reset Semanal", "¿Confirmas el cierre de semana? (Se guardará el historial pero NO se borrará el Score Log)", ui.ButtonSet.YES_NO);
     if (resp !== ui.Button.YES) return;
 
-    var ranking = generarRankingParaHistorial();
-    if (ranking && ranking.length > 0) {
-        guardarHistorialSemana(ranking);
-    }
-
-    var log = ss.getSheetByName(PRICE_LOG);
-    if (log && log.getLastRow() > 2) {
-        var semN = "📦 Log " + new Date().toLocaleDateString("es").replace(/\//g, "-");
-        var arch = ss.insertSheet(semN);
-        var logData = log.getRange(1, 1, log.getLastRow(), 6).getValues();
-        arch.getRange(1, 1, logData.length, 6).setValues(logData);
-        log.getRange(3, 1, log.getLastRow() - 2, 6).clearContent();
-    }
+    // 1. Guardar historial en la hoja de historial (opcional, como respaldo extra)
+    // En la nueva lógica, el Score Log ya es el historial. Pero podemos guardar un resumen.
+    // guardarHistorialSemana(generarRankingParaHistorial()); 
 
     var ws = ss.getSheetByName(SEMANA_SHEET);
     if (ws && ws.getLastRow() >= 6) {
-        // Limpiar 30 columnas desde el inicio de precios (25 precios + 5 de resumen/extras)
-        ws.getRange(6, COL_PRECIOS_INI, ws.getLastRow() - 5, 30).clearContent().clearFormat();
+        // Desactivar todos los checks de 'Track' para empezar la semana eligiendo de nuevo
+        // Columna E (index 5)
+        var lastR = ws.getLastRow();
+        ws.getRange(6, 5, lastR - 5, 1).setValue(false);
+
+        // Limpiar solo las columnas de precios y resumen de la vista actual
+        // No borramos los tickers, así la hoja crece como histórico
+        ws.getRange(6, COL_PRECIOS_INI, lastR - 5, 30).clearContent().clearFormat();
+        
         ws.getRange(3, 2).setValue("Semana del " + new Date().toLocaleDateString("es"));
     }
 
-    ss.toast("Reset completo. Listo para nueva semana.", "🔄", 5);
+    ss.toast("Semana reseteada. El Score Log permanece intacto.", "🔄", 5);
 }
 
 /**
@@ -338,6 +592,7 @@ function guardarHistorialSemana(ranking) {
 
 /**
  * Actualiza el resumen de resultados en la hoja activo del Tracker.
+ * @param {Array<Object>} ranking - Listado de estadísticas por ticker.
  */
 function actualizarResumenSemana(ranking) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -351,16 +606,20 @@ function actualizarResumenSemana(ranking) {
         if (tk) filaMap[tk] = 6 + i;
     }
 
-    for (var ri = 0; ri < ranking.length; ri++) {
-        var r2 = ranking[ri];
-        var row = filaMap[r2.ticker];
-        if (!row) continue;
+    ranking.forEach(function(r) {
+        var row = filaMap[r.ticker];
+        if (!row) return;
 
-        ws.getRange(row, COL_RESUMEN_INI).setValue(r2.pnlPct).setNumberFormat("0.00%").setBackground(r2.pnlPct >= 0 ? "#E8F5E9" : "#FFEBEE");
-        ws.getRange(row, COL_RESUMEN_INI + 1).setValue(r2.hitTarget ? "★ SÍ" : "—");
-        ws.getRange(row, COL_RESUMEN_INI + 2).setValue(r2.hitStop ? "✗ SÍ" : "—");
-        ws.getRange(row, COL_RESUMEN_INI + 3).setValue(r2.mejorHora).setFontSize(8).setFontColor("#E65100");
-    }
+        // PnL % (Columna AN - 40) -> Según COL_RESUMEN_INI = 39
+        ws.getRange(row, COL_RESUMEN_INI).setValue(r.pnlPct).setNumberFormat("0.00%").setBackground(r.pnlPct >= 0 ? "#E8F5E9" : "#FFEBEE");
+        
+        // Tgt / Stop
+        ws.getRange(row, COL_RESUMEN_INI + 1).setValue(r.hitTarget ? "★ SÍ" : "—").setFontColor(r.hitTarget ? C.GREEN : C.GRAY);
+        ws.getRange(row, COL_RESUMEN_INI + 2).setValue(r.hitStop ? "✗ SÍ" : "—").setFontColor(r.hitStop ? C.RED : C.GRAY);
+        
+        // P. Máximo (Mejor precio alcanzado en la semana)
+        ws.getRange(row, COL_RESUMEN_INI + 3).setValue(r.pMax || "").setNumberFormat('"$"#,##0.00').setFontSize(8);
+    });
 }
 
 /**
@@ -466,21 +725,19 @@ function enviarResumenManual() {
 }
 
 /**
- * Obtiene un objeto con los tickers que el usuario tiene marcados como 'Track' en la hoja semanal.
- * @returns {Object} Mapa de tickers -> datos (entrada, stop, target).
+ * Obtiene todos los tickers de la hoja semanal, marcando cuáles están activos para seguimiento detallado.
  */
 function obtenerTickersTrackeados() {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var ws = ss.getSheetByName(SEMANA_SHEET);
-    var tracked = {};
-    if (!ws || ws.getLastRow() < 6) return tracked;
+    var todos = {};
+    if (!ws || ws.getLastRow() < 6) return todos;
 
-    var data = ws.getRange(6, 1, MAX_CAND, 14).getValues();
+    var data = ws.getRange(6, 1, ws.getLastRow() - 5, 14).getValues();
     for (var i = 0; i < data.length; i++) {
         var tk = String(data[i][0]).trim().toUpperCase();
-        var isTracked = data[i][4] === true;
-        if (tk && isTracked) {
-            tracked[tk] = {
+        if (tk) {
+            todos[tk] = {
                 ticker: tk,
                 empresa: data[i][1],
                 sector: data[i][2],
@@ -488,9 +745,18 @@ function obtenerTickersTrackeados() {
                 stop: parseFloat(data[i][6]) || 0,
                 target: parseFloat(data[i][7]) || 0,
                 score: data[i][12],
-                filtros: data[i][13]
+                filtros: data[i][13],
+                isTracked: data[i][4] === true, // Check de la columna E
+                row: 6 + i
             };
         }
     }
-    return tracked;
+    return todos;
+}
+
+/**
+ * Simulación manual para probar el check de las 10am (captura total).
+ */
+function testRegistrar10am() {
+    registrarPrecios(10, true);
 }

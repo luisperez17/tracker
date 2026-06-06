@@ -52,16 +52,18 @@ function getInfoTiempoNY() {
     return {
         fecha: nyTime,
         hora: nyTime.getHours(),
+        minutos: nyTime.getMinutes(),
         diaSemana: nyTime.getDay(),
         diaSemanaStr: dias[nyTime.getDay()]
     };
 }
 
 /**
- * Obtiene la hora actual en Eastern Time (ET).
+ * Obtiene la hora actual en Eastern Time (ET) como valor decimal (ej: 10.5 para 10:30).
  */
 function obtenerHoraETNow() {
-    return getInfoTiempoNY().hora;
+    var info = getInfoTiempoNY();
+    return info.hora + (info.minutos / 60);
 }
 
 /**
@@ -78,16 +80,35 @@ function fetchPrecioYahoo(ticker) {
 }
 
 /**
- * Verifica si ya se registró el precio para una hora específica hoy.
+ * Verifica si ya se registró el precio para una hora específica hoy en el Score Log.
  */
 function yaRegistradoHoy(horaET) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var log = ss.getSheetByName(PRICE_LOG);
-    if (!log || log.getLastRow() < 3) return false;
-    var todayStr = new Date().toLocaleDateString("es");
-    var data = log.getRange(3, 1, log.getLastRow() - 2, 3).getValues();
-    for (var i = 0; i < data.length; i++) {
-        if (new Date(data[i][0]).toLocaleDateString("es") === todayStr && Number(data[i][2]) === horaET) return true;
+    var log = ss.getSheetByName(LOG_SHEET);
+    if (!log || log.getLastRow() < 2) return false;
+
+    var info = getInfoTiempoNY();
+    var fechaHoyStr = Utilities.formatDate(info.fecha, "GMT", "yyyy-MM-dd");
+    
+    var lastRow = log.getLastRow();
+    if (lastRow < 2) return false;
+
+    // Optimizamos: solo leemos las últimas ~100 filas
+    var startRow = Math.max(2, lastRow - 100);
+    var numRows = lastRow - startRow + 1;
+    if (numRows <= 0) return false;
+
+    var data = log.getRange(startRow, 1, numRows, 10).getValues();
+    var colPrecio = obtenerColumnaPrecio(horaET);
+    
+    for (var i = data.length - 1; i >= 0; i--) {
+        var fechaRow = data[i][0];
+        var fechaRowStr = (fechaRow instanceof Date) ? Utilities.formatDate(fechaRow, "GMT", "yyyy-MM-dd") : "";
+        
+        if (fechaRowStr === fechaHoyStr) {
+            // Si encontramos al menos un valor en la columna de la hora para hoy
+            if (data[i][colPrecio - 1] !== "" && data[i][colPrecio - 1] !== null) return true;
+        }
     }
     return false;
 }

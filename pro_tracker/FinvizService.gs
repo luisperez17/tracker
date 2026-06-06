@@ -26,9 +26,9 @@ function obtenerFiltro(filtro, silencioso) {
 function obtenerFiltroConPerf(filtro, perfMap, silencioso) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var ws = ss.getSheetByName(filtro.hoja);
-    if (!ws) { 
-        ws = ss.insertSheet(filtro.hoja); 
-        formatearHojaFiltro(ws, filtro); 
+    if (!ws) {
+        ws = ss.insertSheet(filtro.hoja);
+        formatearHojaFiltro(ws, filtro);
     }
 
     var htmlWeek = fetchFinviz(filtro.baseUrl + "&o=-perf1w");
@@ -218,7 +218,7 @@ function fetchFinviz(url) {
                 "Accept": "text/html,application/xhtml+xml",
                 "Accept-Language": "en-US,en;q=0.9"
             },
-            muteHttpExceptions: true, 
+            muteHttpExceptions: true,
             followRedirects: true
         });
         return r.getResponseCode() === 200 ? r.getContentText() : null;
