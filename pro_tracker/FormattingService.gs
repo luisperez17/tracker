@@ -167,8 +167,11 @@ function formatearHojaOperaciones(ws) {
     ws.getRange(3, 1).setValue("Aportes acumulados ($)").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold").setFontSize(9);
     ws.getRange(3, 2).setValue(0).setBackground("#FFF3E0").setFontColor("#E65100").setFontWeight("bold").setNumberFormat('"$"#,##0.00');
 
+    ws.getRange(3, 3).setValue("Retiros acumulados ($)").setBackground("#B71C1C").setFontColor(C.WHITE).setFontWeight("bold").setFontSize(9);
+    ws.getRange(3, 4).setValue(0).setBackground("#FFEBEE").setFontColor("#B71C1C").setFontWeight("bold").setNumberFormat('"$"#,##0.00');
+
     ws.getRange(4, 1).setValue("Capital total ($)").setBackground("#1B5E20").setFontColor(C.WHITE).setFontWeight("bold").setFontSize(9);
-    ws.getRange(4, 2).setFormula("=B2+B3").setBackground("#1E3A2F").setFontColor(C.GREEN).setFontWeight("bold").setNumberFormat('"$"#,##0.00');
+    ws.getRange(4, 2).setFormula("=B2+B3-D3").setBackground("#1E3A2F").setFontColor(C.GREEN).setFontWeight("bold").setNumberFormat('"$"#,##0.00');
 
     ws.getRange(5, 1).setValue("% Riesgo").setBackground(C.ACCENT).setFontColor(C.WHITE).setFontWeight("bold").setFontSize(9);
     ws.getRange(5, 2).setValue(0.03).setBackground(C.LBLUE).setFontColor(C.ACCENT).setFontWeight("bold").setNumberFormat("0%");
@@ -483,6 +486,10 @@ function formatearHojaSemana(ws) {
     }
     ws.setRowHeight(5, 36);
 
+    // Forzar formato numérico en columnas de precios para evitar fechas (bug locale)
+    ws.getRange(6, 6, MAX_CAND, 3).setNumberFormat('"$"#,##0.00'); // Entrada, Stop, Target
+    ws.getRange(6, 14, MAX_CAND, 25).setNumberFormat('"$"#,##0.00'); // Precios intradía + resumen
+
     // Filas de datos (Hasta MAX_CAND para histórico)
     var range = ws.getRange(6, 1, MAX_CAND, nCols);
     range.setFontSize(9).setVerticalAlignment("middle");
@@ -508,11 +515,32 @@ function formatearHojaSemana(ws) {
  * Formatea la hoja "WL CDI".
  */
 function formatearHojaWL(ws) {
-    ws.getRange(1, 1, 1, 7).merge().setValue("📋  Watchlist CDI (Club de Inversionistas)").setBackground(C.DARK).setFontColor(C.GREEN).setFontWeight("bold").setHorizontalAlignment("center");
+    ws.clear();
+    ws.clearContents();
+    ws.clearFormats();
+    ws.getRange(1, 1, ws.getMaxRows(), ws.getMaxColumns()).setDataValidation(null);
+
+    ws.getRange(1, 1, 1, 7).merge()
+        .setValue("📋  Watchlist CDI (Club de Inversionistas)")
+        .setBackground(C.DARK).setFontColor(C.GREEN).setFontSize(13)
+        .setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle");
+    ws.setRowHeight(1, 36);
+
+    ws.getRange(2, 1, 1, 7).merge()
+        .setValue("Pega aquí la lista semanal: Ticker | Empresa | Sector | ATR/LOW | Earnings | Perf Sem % | Notas")
+        .setBackground(C.ACCENT).setFontColor(C.YELLOW).setFontSize(9)
+        .setFontWeight("bold").setHorizontalAlignment("left");
+    ws.setRowHeight(2, 22);
+
     var hdrs = ["Ticker", "Empresa", "Sector", "ATR/LOW", "Earnings", "Perf Sem %", "Notas"];
+    var wCol = [70, 160, 110, 90, 110, 85, 140];
     for (var i = 0; i < hdrs.length; i++) {
-        ws.getRange(4, i + 1).setValue(hdrs[i]).setBackground(C.DARK).setFontColor(C.WHITE).setFontWeight("bold").setHorizontalAlignment("center");
+        ws.getRange(4, i + 1).setValue(hdrs[i])
+            .setBackground(C.DARK).setFontColor(C.WHITE)
+            .setFontWeight("bold").setHorizontalAlignment("center").setWrap(true);
+        ws.setColumnWidth(i + 1, wCol[i]);
     }
+    ws.setRowHeight(4, 36);
     ws.setFrozenRows(4);
 }
 

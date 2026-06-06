@@ -62,7 +62,18 @@ function consolidarTop(perfMap) {
         }
     }
 
-    // Complementar con perfMap y calcular Score MTM
+    // Leer WL CDI ANTES de calcular scores (para bonus de score)
+    var wlSet = {};
+    var wlSheet = ss.getSheetByName("📋 WL CDI");
+    if (wlSheet && wlSheet.getLastRow() >= 5) {
+        var wlData = wlSheet.getRange(5, 1, wlSheet.getLastRow() - 4, 5).getValues();
+        for (var wi = 0; wi < wlData.length; wi++) {
+            var wlTicker = String(wlData[wi][0]).trim().toUpperCase();
+            if (wlTicker) wlSet[wlTicker] = { atr: String(wlData[wi][3]).trim(), earn: String(wlData[wi][4]).trim() };
+        }
+    }
+
+    // Complementar con perfMap y calcular Score MTM (con bonus WL)
     var tickers = Object.keys(mapa);
     for (var ti = 0; ti < tickers.length; ti++) {
         var t = tickers[ti];
@@ -70,7 +81,10 @@ function consolidarTop(perfMap) {
         if (!mapa[t].perfWeek && p.perfWeek) mapa[t].perfWeek = p.perfWeek;
         if (!mapa[t].perfMonth && p.perfMonth) mapa[t].perfMonth = p.perfMonth;
         if (!mapa[t].perfQuart && p.perfQuart) mapa[t].perfQuart = p.perfQuart;
-        mapa[t].scoreMTM = calcularScore(mapa[t].filtros);
+        var scoreBase = calcularScore(mapa[t].filtros);
+        // Bonus WL: +1.0 si está en la lista curada semanal
+        if (wlSet[t]) scoreBase += 1.0;
+        mapa[t].scoreMTM = Math.round(scoreBase * 100) / 100;
     }
 
     // Ordenar: score desc → perfWeek desc
@@ -94,22 +108,11 @@ function consolidarTop(perfMap) {
     if (lr >= 5) wsTop.getRange(5, 1, lr - 4, COL_SNAPDATE).clearContent().clearFormat();
     wsTop.getRange(3, 1).setValue(
         ordenados.length + " tickers únicos  |  " + new Date().toLocaleString("es") +
-        "  |  Orden: Score MTM → Perf Semana  |  Score = puntos por tier (T1=3pts, T2=2pts, T3=1.5pts, T4=1pt)"
+        "  |  Orden: Score MTM → Perf Semana  |  Score = puntos por tier + 1.0 WL"
     ).setBackground(C.MID).setFontColor(C.GRAY).setFontSize(9);
 
-    // Leer WL CDI para marcas
-    var wlSet = {};
-    var wlSheet = ss.getSheetByName("📋 WL CDI");
-    if (wlSheet && wlSheet.getLastRow() >= 5) {
-        var wlData = wlSheet.getRange(5, 1, wlSheet.getLastRow() - 4, 5).getValues();
-        for (var wi = 0; wi < wlData.length; wi++) {
-            var wlTicker = String(wlData[wi][0]).trim().toUpperCase();
-            if (wlTicker) wlSet[wlTicker] = { atr: String(wlData[wi][3]).trim(), earn: String(wlData[wi][4]).trim() };
-        }
-    }
-
-    // Reset de encabezados de score y snapshots
-    restablecerEncabezadosTop(wsTop, COL_SCORE, COL_NFRAW, COL_SNAPDATE);
+    // Reset de encabezados de score, extras y snapshots
+    restablecerEncabezadosTop(wsTop, COL_SCORE, COL_NFRAW, COL_WL, COL_ATR, COL_EARN, COL_SNAPDATE);
 
     // Escribir filas consolidadas
     for (var oi = 0; oi < ordenados.length; oi++) {
@@ -127,6 +130,9 @@ function consolidarTop(perfMap) {
             d.price, d.change
         ]]).setBackground(rowBg).setFontSize(9)
             .setVerticalAlignment("middle").setHorizontalAlignment("center");
+
+        // Forzar formato numérico en precio para evitar fechas (bug locale español)
+        wsTop.getRange(r, 7).setNumberFormat('"$"#,##0.00');
 
         wsTop.getRange(r, 1).setFontWeight("bold");
         wsTop.getRange(r, 2, 1, 2).setHorizontalAlignment("left");
@@ -321,17 +327,32 @@ function generarRankingParaHistorial() {
 /**
  * Función interna para limpiar y reencabezar la hoja Top.
  */
-function restablecerEncabezadosTop(wsTop, COL_SCORE, COL_NFRAW, COL_SNAPDATE) {
+function restablecerEncabezadosTop(wsTop, COL_SCORE, COL_NFRAW, COL_WL, COL_ATR, COL_EARN, COL_SNAPDATE) {
     wsTop.getRange(4, COL_SCORE).setValue("Score MTM")
         .setBackground("#E65100").setFontColor("#FFFFFF")
         .setFontWeight("bold").setHorizontalAlignment("center").setFontSize(8).setWrap(true);
-    wsTop.getRange(4, COL_SCORE).setNote("Score MTM: puntuación ponderada por tier de señal...");
+    wsTop.getRange(4, COL_SCORE).setNote("Score MTM: puntuación ponderada por tier de señal + 1.0 si está en WL CDI");
     wsTop.setColumnWidth(COL_SCORE, 72);
 
     wsTop.getRange(4, COL_NFRAW).setValue("# Filtros")
         .setBackground(C.ACCENT).setFontColor("#FFFFFF")
         .setFontWeight("bold").setHorizontalAlignment("center").setFontSize(8).setWrap(true);
     wsTop.setColumnWidth(COL_NFRAW, 62);
+
+    wsTop.getRange(4, COL_WL).setValue("WL CDI")
+        .setBackground("#E65100").setFontColor("#FFFFFF")
+        .setFontWeight("bold").setHorizontalAlignment("center").setFontSize(8).setWrap(true);
+    wsTop.setColumnWidth(COL_WL, 72);
+
+    wsTop.getRange(4, COL_ATR).setValue("ATR/LOW")
+        .setBackground("#1A237E").setFontColor(C.YELLOW)
+        .setFontWeight("bold").setHorizontalAlignment("center").setFontSize(8).setWrap(true);
+    wsTop.setColumnWidth(COL_ATR, 80);
+
+    wsTop.getRange(4, COL_EARN).setValue("Earnings")
+        .setBackground("#B71C1C").setFontColor("#FFFFFF")
+        .setFontWeight("bold").setHorizontalAlignment("center").setFontSize(8).setWrap(true);
+    wsTop.setColumnWidth(COL_EARN, 90);
 
     wsTop.getRange(4, COL_SNAPDATE).setValue("Snapshot")
         .setBackground(C.MID).setFontColor(C.GRAY)

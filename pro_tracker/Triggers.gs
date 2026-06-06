@@ -113,6 +113,18 @@ function onEdit(e) {
                 // --- CASO B: HOJA SEMANA TRACKER ---
                 if (sheetName === SEMANA_SHEET && currentCol === 1 && currentRow >= 6) {
                     var infoSem = buscarTicker(ticker);
+
+                    // Buscar en WL CDI para marcar y mostrar ATR/Earnings
+                    var wlSetEdit = {};
+                    var wlSheetEdit = ss.getSheetByName("📋 WL CDI");
+                    if (wlSheetEdit && wlSheetEdit.getLastRow() >= 5) {
+                        var wlDataEdit = wlSheetEdit.getRange(5, 1, wlSheetEdit.getLastRow() - 4, 5).getValues();
+                        for (var wj = 0; wj < wlDataEdit.length; wj++) {
+                            var wlTk = String(wlDataEdit[wj][0]).trim().toUpperCase();
+                            if (wlTk) wlSetEdit[wlTk] = { atr: String(wlDataEdit[wj][3]).trim(), earn: String(wlDataEdit[wj][4]).trim() };
+                        }
+                    }
+
                     if (infoSem) {
                         sheet.getRange(currentRow, 1).setValue(ticker); // Asegurar mayúsculas
                         sheet.getRange(currentRow, 2).setValue(infoSem.empresa || "");
@@ -123,7 +135,17 @@ function onEdit(e) {
                         colorPct(sheet.getRange(currentRow, 12), infoSem.perfMonth, 10, 0);
 
                         var scoreFiltros = infoSem.score + " / " + infoSem.filtrosStr;
-                        sheet.getRange(currentRow, 13).setValue(scoreFiltros).setFontSize(8).setHorizontalAlignment("center");
+                        var wlInfo = wlSetEdit[ticker];
+                        if (wlInfo) {
+                            scoreFiltros = "⭐ WL | " + scoreFiltros;
+                            if (wlInfo.atr) scoreFiltros += " | ATR:" + wlInfo.atr;
+                            if (wlInfo.earn) scoreFiltros += " | 🔴 " + wlInfo.earn;
+                        }
+                        var cellFiltros = sheet.getRange(currentRow, 13);
+                        cellFiltros.setValue(scoreFiltros).setFontSize(8).setHorizontalAlignment("center");
+                        if (wlInfo) {
+                            cellFiltros.setFontColor("#E65100").setFontWeight("bold").setBackground("#FFF8E1");
+                        }
                     }
                 }
             }

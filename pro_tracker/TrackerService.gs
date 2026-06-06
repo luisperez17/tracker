@@ -60,9 +60,10 @@ function registrarPrecios(horaET, esManual) {
     var fechaHoyStr = Utilities.formatDate(fechaHoy, "GMT", "yyyy-MM-dd");
 
     // DETERMINAR SI ES EL PRIMER REGISTRO DEL DÍA
+    // Nota: Score Log tiene título en fila 1, encabezados en fila 2, datos desde fila 3
     var logRows = log.getLastRow();
     var isFirstOfDay = true;
-    if (logRows >= 2) {
+    if (logRows >= 3) {
         var lastFecha = log.getRange(logRows, 1).getValue();
         var lastFechaStr = (lastFecha instanceof Date) ? Utilities.formatDate(lastFecha, "GMT", "yyyy-MM-dd") : "";
         if (lastFechaStr === fechaHoyStr) isFirstOfDay = false;
@@ -107,7 +108,8 @@ function registrarPrecios(horaET, esManual) {
 
     } else {
         // --- CASO B: ACTUALIZACIÓN INCREMENTAL (SOLO TRACKED) ---
-        var logRange = logRows >= 2 ? log.getRange(2, 1, logRows - 1, 10) : null;
+        // Datos empiezan en fila 3 (fila 1 = título, fila 2 = encabezados)
+        var logRange = logRows >= 3 ? log.getRange(3, 1, logRows - 2, 10) : null;
         var logData = logRange ? logRange.getValues() : [];
         var updCount = 0;
 
@@ -124,7 +126,7 @@ function registrarPrecios(horaET, esManual) {
             for (var r = logData.length - 1; r >= 0; r--) {
                 var fRowStr = (logData[r][0] instanceof Date) ? Utilities.formatDate(logData[r][0], "GMT", "yyyy-MM-dd") : "";
                 if (fRowStr === fechaHoyStr && String(logData[r][1]).toUpperCase() === ticker) {
-                    filaEncontrada = r + 2;
+                    filaEncontrada = r + 3; // Offset fila 3
                     break;
                 }
             }
@@ -192,18 +194,6 @@ function obtenerColumnaPrecio(horaET) {
     if (horaET === 14.5) return 8;
     if (horaET === 15.75) return 9;
     return 3;
-}
-
-/**
- * Formatea la nueva hoja de Score Log.
- */
-function formatearScoreLog(ws) {
-    var headers = [["FECHA", "TICKER", "P. 10AM", "SCORE", "FILTROS", "P. 11AM", "P. 1PM", "P. 2:30PM", "P. 3:45PM", "TRACKER?"]];
-    ws.getRange(1, 1, 1, 10).setValues(headers)
-      .setBackground("#1A1A2E").setFontColor("white").setFontWeight("bold").setHorizontalAlignment("center");
-    ws.setFrozenRows(1);
-    ws.setColumnWidth(1, 90);
-    ws.setColumnWidth(5, 250);
 }
 
 /**
