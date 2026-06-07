@@ -171,7 +171,8 @@ function onEdit(e) {
 function instalarTriggers() {
     eliminarTriggersPrecios();
     programarSiguienteCheck();
-    SpreadsheetApp.getActiveSpreadsheet().toast("Sistema de disparadores de cadena (Métrica Precisa) ACTIVADO.", "⚙️", 5);
+    programarVerificacion9AM();
+    SpreadsheetApp.getActiveSpreadsheet().toast("Triggers activados: Precios cada hora + Verificación 9am diaria.", "⚙️", 6);
 }
 
 /**
@@ -179,7 +180,8 @@ function instalarTriggers() {
  */
 function desinstalarTriggers() {
     eliminarTriggersPrecios();
-    SpreadsheetApp.getActiveSpreadsheet().toast("Disparadores DESACTIVADOS.", "🔴", 5);
+    eliminarTriggersVerificacion();
+    SpreadsheetApp.getActiveSpreadsheet().toast("Todos los disparadores DESACTIVADOS (precios + verificación 9am).", "🔴", 5);
 }
 
 /**
@@ -207,13 +209,13 @@ function programarSiguienteCheck() {
         }
     }
 
-    if (nextSlot !== null && diaSem >= 1 && diaSem <= 5) {
-        // Hay un slot hoy mismo
-        nextDate.setHours(nextSlot);
-    } else {
-        // No hay más slots hoy, o es fin de semana. Buscar el próximo día laboral a las 10 AM.
-        nextDate.setHours(slots[0]); // 10 AM
+    var targetSlot = nextSlot !== null ? nextSlot : slots[0];
+    var h = Math.floor(targetSlot);
+    var m = Math.round((targetSlot - h) * 60);
+    nextDate.setHours(h, m, 0, 0);
 
+    if (nextSlot === null || diaSem < 1 || diaSem > 5) {
+        // No hay más slots hoy, o es fin de semana. Buscar el próximo día laboral.
         do {
             nextDate.setDate(nextDate.getDate() + 1);
         } while (nextDate.getDay() === 0 || nextDate.getDay() === 6); // Saltar Sab y Dom
@@ -248,7 +250,8 @@ function registrarPreciosTrigger() {
     programarSiguienteCheck();
 
     var etHourNow = obtenerHoraETNow();
-    var etDay = new Date().getDay();
+    var etInfo = getInfoTiempoNY();
+    var etDay = etInfo.diaSemana;
 
     // Validaciones de seguridad
     if (etDay < 1 || etDay > 5) return;
@@ -266,6 +269,50 @@ function registrarPreciosTrigger() {
     if (yaRegistradoHoy(slotActual)) return;
 
     registrarPrecios(slotActual, false);
+}
+
+/**
+ * Programa el trigger diario de verificación a las 9:00 AM ET (lunes a viernes).
+ * Ejecutar una sola vez para activar.
+ */
+function programarVerificacion9AM() {
+    eliminarTriggersVerificacion();
+
+    var info = getInfoTiempoNY();
+    var now = info.fecha;
+    var diaSem = info.diaSemana;
+
+    // Crear trigger diario a las 9:00 AM
+    ScriptApp.newTrigger("verificacion9AMTrigger")
+        .timeBased()
+        .everyDays(1)
+        .atHour(9)
+        .nearMinute(0)
+        .create();
+
+    Logger.log("Trigger de verificación 9AM creado.");
+}
+
+/**
+ * Handler del trigger de verificación 9AM.
+ * Solo ejecuta de lunes a viernes.
+ */
+function verificacion9AMTrigger() {
+    var etDay = getInfoTiempoNY().diaSemana;
+    if (etDay < 1 || etDay > 5) return; // Solo lun-vie
+    reporteVerificacion9AM();
+}
+
+/**
+ * Elimina los triggers de verificación 9AM para evitar duplicados.
+ */
+function eliminarTriggersVerificacion() {
+    var triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(function(t) {
+        if (t.getHandlerFunction() === "verificacion9AMTrigger") {
+            ScriptApp.deleteTrigger(t);
+        }
+    });
 }
 
 /**

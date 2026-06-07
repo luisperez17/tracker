@@ -300,7 +300,7 @@ function enviarResumenWhatsApp(activas) {
 function generarReporteViernes() {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var log = ss.getSheetByName(LOG_SHEET);
-    if (!log || log.getLastRow() < 2) {
+    if (!log || log.getLastRow() < 3) {
         ss.toast("No hay datos en el Score Log para generar el reporte.", "⚠️", 5);
         return;
     }
@@ -318,7 +318,8 @@ function generarReporteViernes() {
     var viernes = new Date(lunes.getTime() + 4 * 24 * 60 * 60 * 1000);
     viernes.setHours(23,59,59,999);
 
-    var logData = log.getRange(2, 1, log.getLastRow() - 1, 10).getValues();
+    // Datos empiezan en fila 3 (fila 1 = título, fila 2 = encabezados)
+    var logData = log.getRange(3, 1, log.getLastRow() - 2, 10).getValues();
     var stats = {}; // Ticker -> { ticker, inicio, fin, pMax, pMin, sumScore, countScore, filtros: Set, entries: [] }
 
     // 3. Agrupar datos del Log por Ticker para la semana actual
@@ -749,4 +750,201 @@ function obtenerTickersTrackeados() {
  */
 function testRegistrar10am() {
     registrarPrecios(10, true);
+}
+
+/**
+ * Verificación diaria: consulta Finviz Tier 1/2 SOLO para tickers en Semana Tracker + Top 10.
+ * Guarda resultados en 🔍 Verificación (Score Hoy vs Inicial).
+ * NO regenera Top Candidatos completo.
+ * @returns {Array<Object>} Datos de verificación para usar en el reporte.
+ */
+function verificarSemanaTracker() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var topSheet = ss.getSheetByName("🏆 Top Candidatos");
+    var semSheet = ss.getSheetByName(SEMANA_SHEET);
+    var verifSheet = ss.getSheetByName("🔍 Verificación");
+    if (!verifSheet) {
+        verifSheet = ss.insertSheet("🔍 Verificación");
+        formatearHojaVerificacion(verifSheet);
+    }
+
+    // 1. Reunir tickers: todas las filas de Semana Tracker + Top 10
+    var tickersSet = {};
+    var topMap = {}; // ticker -> score inicial, empresa
+
+    if (semSheet && semSheet.getLastRow() >= 6) {
+        var semData = semSheet.getRange(6, 1, semSheet.getLastRow() - 5, 14).getValues();
+        for (var s = 0; s < semData.length; s++) {
+            var tk = String(semData[s][0]).trim().toUpperCase();
+            if (tk) tickersSet[tk] = { empresa: semData[s][1] || "", tracked: semData[s][4] === true };
+        }
+    }
+
+    if (topSheet && topSheet.getLastRow() >= 5) {
+        var nFiltros = FILTROS.length;
+        var colScore = 9 + nFiltros + 1;
+        var topData = topSheet.getRange(5, 1, Math.min(10, topSheet.getLastRow() - 4), colScore).getValues();
+        for (var t = 0; t < topData.length; t++) {
+            var tk = String(topData[t][0]).trim().toUpperCase();
+            if (!tk) continue;
+            topMap[tk] = {
+                scoreInicial: parseFloat(topData[t][colScore - 1]) || 0,
+                empresa: topData[t][1] || "",
+                price: topData[t][6] || ""
+            };
+            if (!tickersSet[tk]) tickersSet[tk] = { empresa: topData[t][1] || "", tracked: false };
+        }
+    }
+
+    var listaTickers = Object.keys(tickersSet);
+    if (listaTickers.length === 0) return [];
+
+    // 2. Consultar Finviz Tier 1/2 (rápido)
+    var scoreData = calcularScoreDiarioParaTickers(listaTickers);
+
+    // 3. Leer WL para marcar
+    var wlSet = {};
+    var wlSheet = ss.getSheetByName("📋 WL CDI");
+    if (wlSheet && wlSheet.getLastRow() >= 5) {
+        var wlData = wlSheet.getRange(5, 1, wlSheet.getLastRow() - 4, 1).getValues();
+        for (var w = 0; w < wlData.length; w++) {
+            var wlTk = String(wlData[w][0]).trim().toUpperCase();
+            if (wlTk) wlSet[wlTk] = true;
+        }
+    }
+
+    // 4. Armar datos de verificación
+    var verifData = [];
+    for (var i = 0; i < listaTickers.length; i++) {
+        var tk = listaTickers[i];
+        var infoTk = tickersSet[tk];
+        var topInfo = topMap[tk] || { scoreInicial: 0, empresa: infoTk.empresa, price: "" };
+        var scoreHoy = scoreData[tk] ? scoreData[tk].score : 0;
+        var filtrosHoy = scoreData[tk] ? scoreData[tk].filtros : "";
+        var diff = Math.round((scoreHoy - topInfo.scoreInicial) * 100) / 100;
+
+        // Precio actual
+        var precio = fetchPrecioYahoo(tk);
+        if (precio === null) precio = topInfo.price || 0;
+
+        // Estado
+        var estado = "⚪";
+        if (infoTk.tracked && topInfo.scoreInicial > 0) {
+            var precioIni = parseFloat(topInfo.price) || precio || 1;
+            var pnl = (precio - precioIni) / precioIni;
+            if (pnl >= 0.05) estado = "🎯";
+            else if (pnl <= -0.05) estado = "🛑";
+            else if (diff > 0) estado = "📈 Score";
+            else if (diff < 0) estado = "📉 Score";
+        }
+
+        verifData.push({
+            ticker: tk,
+            empresa: topInfo.empresa || infoTk.empresa,
+            scoreInicial: topInfo.scoreInicial,
+            scoreHoy: scoreHoy,
+            diff: diff,
+            filtrosHoy: filtrosHoy,
+            precio: precio,
+            wl: wlSet[tk] ? "⭐" : "",
+            estado: estado,
+            tracked: infoTk.tracked
+        });
+    }
+
+    // 5. Escribir en hoja Verificación (limpiar antes)
+    var lr = verifSheet.getLastRow();
+    if (lr >= 5) verifSheet.getRange(5, 1, lr - 4, 9).clearContent().clearFormat();
+    verifSheet.getRange(2, 1, 1, 9).merge().setValue("Verificación: " + new Date().toLocaleString("es"))
+        .setBackground(C.ACCENT).setFontColor(C.YELLOW).setFontWeight("bold").setFontSize(9);
+
+    for (var r = 0; r < verifData.length; r++) {
+        var d = verifData[r];
+        var row = 5 + r;
+        var bg = d.tracked ? "#FFF8E1" : (r % 2 === 0 ? C.LIGHT : C.WHITE);
+        verifSheet.getRange(row, 1, 1, 9).setValues([[d.ticker, d.empresa, d.scoreInicial, d.scoreHoy, d.diff, d.filtrosHoy, d.precio, d.wl, d.estado]])
+            .setBackground(bg).setFontSize(9).setVerticalAlignment("middle").setHorizontalAlignment("center");
+        verifSheet.getRange(row, 5).setFontColor(d.diff > 0 ? C.GREEN : (d.diff < 0 ? C.RED : C.GRAY)).setFontWeight("bold");
+    }
+
+    return verifData;
+}
+
+/**
+ * Reporte de verificación diaria a las 9am ET.
+ * Paso 1: ejecuta verificarSemanaTracker() (consulta Tier 1/2 liviano).
+ * Paso 2: lee 🔍 Verificación y envía WhatsApp.
+ * Se ejecuta automáticamente de lunes a viernes.
+ */
+function reporteVerificacion9AM() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var info = getInfoTiempoNY();
+    var diaStr = info.diaSemanaStr;
+
+    // 1. Ejecutar verificación (consulta Finviz Tier 1/2 y guarda en hoja)
+    var verifData = verificarSemanaTracker();
+
+    // 2. Separar: activas vs oportunidades
+    var activas = verifData.filter(function(d) { return d.tracked; });
+    var noActivas = verifData.filter(function(d) { return !d.tracked; });
+    noActivas.sort(function(a, b) { return b.scoreHoy - a.scoreHoy; });
+    var top5 = noActivas.slice(0, 5);
+
+    // 3. Obtener precios actuales y PnL para activas
+    for (var i = 0; i < activas.length; i++) {
+        var a = activas[i];
+        var precio = fetchPrecioYahoo(a.ticker);
+        if (precio === null) precio = a.precio;
+        a.precioActual = precio;
+        var precioRef = parseFloat(a.precio) || 0;
+        a.pnl = precioRef > 0 ? (precio - precioRef) / precioRef : 0;
+    }
+
+    // 4. Armar mensaje WhatsApp
+    var msg = "🔍 *VERIFICACIÓN 9AM — " + diaStr + "*\n";
+    msg += "_Scores actualizados con Finviz Tier 1/2_\n\n";
+
+    if (activas.length > 0) {
+        msg += "*ACTIVAS EN TRACKER:*\n";
+        msg += "```\n";
+        msg += "TKR   S+/-  S-HOY  PREC  RET%  EST\n";
+        msg += "───   ───   ───   ───  ────  ─────\n";
+        for (var a = 0; a < activas.length; a++) {
+            var ra = activas[a];
+            var tk = (ra.ticker + "     ").substring(0, 5);
+            var dStr = (ra.diff >= 0 ? "+" : "") + ra.diff.toFixed(1);
+            dStr = (dStr + "     ").substring(0, 4);
+            var sHoy = (String(ra.scoreHoy) + "     ").substring(0, 4);
+            var pr = (ra.precioActual.toFixed(1) + "     ").substring(0, 4);
+            var ret = ((ra.pnl * 100).toFixed(1) + "%    ").substring(0, 5);
+            if (ra.pnl > 0) ret = "+" + ret;
+            var est = ra.estado;
+            msg += tk + " " + dStr + " " + sHoy + " " + pr + " " + ret + " " + est + "\n";
+        }
+        msg += "```\n";
+    } else {
+        msg += "*No hay activas con Track.*\n\n";
+    }
+
+    if (top5.length > 0) {
+        msg += "*TOP 5 OPORTUNIDADES (NO ACTIVAS):*\n";
+        msg += "```\n";
+        msg += "TKR    S-HOY  S-INI  DIFF  FILTROS\n";
+        msg += "────   ────   ───   ───   ───────\n";
+        for (var t5 = 0; t5 < top5.length; t5++) {
+            var tp = top5[t5];
+            var tk = (tp.ticker + "     ").substring(0, 5);
+            var sc = (String(tp.scoreHoy) + "     ").substring(0, 4);
+            var si = (String(tp.scoreInicial) + "     ").substring(0, 4);
+            var df = (tp.diff >= 0 ? "+" : "") + tp.diff.toFixed(1);
+            df = (df + "    ").substring(0, 4);
+            var fl = (tp.filtrosHoy + "               ").substring(0, 15);
+            msg += tk + "  " + sc + "  " + si + "  " + df + " " + fl + "\n";
+        }
+        msg += "```\n";
+    }
+
+    // 5. Enviar
+    enviarWhatsApp(msg);
+    ss.toast("Verificación 9am enviada por WhatsApp.", "📱", 4);
 }

@@ -122,7 +122,7 @@ function consolidarTop(perfMap) {
         var nF = d.filtros.length;
         var sc = d.scoreMTM;
         var enWL = wlSet[tk] ? true : false;
-        var rowBg = (enWL && sc >= 4) ? "#FFFDE7" : (oi % 2 === 0 ? C.WHITE : C.LIGHT);
+        var rowBg = enWL ? "#FFCC80" : (oi % 2 === 0 ? C.WHITE : C.LIGHT);
 
         wsTop.getRange(r, 1, 1, 8).setValues([[
             tk, d.empresa, d.sector,
@@ -234,7 +234,7 @@ function buscarTicker(ticker) {
 function generarRankingParaHistorial() {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var ws = ss.getSheetByName(SEMANA_SHEET);
-    var log = ss.getSheetByName(PRICE_LOG);
+    var log = ss.getSheetByName(LOG_SHEET);
     if (!ws || !log || log.getLastRow() < 3) return null;
 
     var nItems = Math.min(ws.getLastRow() - 5, 20);

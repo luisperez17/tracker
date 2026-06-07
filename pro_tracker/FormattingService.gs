@@ -20,7 +20,7 @@ function configurarHojas() {
     actualizarFechaDashboard();
 
     // Refrescar el gráfico de equidad
-    var dash = ss.getSheetByName("📊 Dashboard");
+    dash = ss.getSheetByName("📊 Dashboard");
     if (dash) generarGraficoEquidad(dash);
 
     var top = ss.getSheetByName("🏆 Top Candidatos");
@@ -40,6 +40,10 @@ function configurarHojas() {
     var wl = ss.getSheetByName("📋 WL CDI");
     if (!wl) wl = ss.insertSheet("📋 WL CDI");
     formatearHojaWL(wl);
+
+    var verif = ss.getSheetByName("🔍 Verificación");
+    if (!verif) verif = ss.insertSheet("🔍 Verificación");
+    formatearHojaVerificacion(verif);
 
     ss.getSheetByName("📊 Dashboard").activate();
     ss.toast("Listo. Usa 📊 MTM Tracker → Actualizar TODO", "✅", 5);
@@ -571,7 +575,25 @@ function formatearHistorialSemanal(ws) {
  * Formatea la hoja de Verificación.
  */
 function formatearHojaVerificacion(ws) {
-    ws.getRange(1, 1, 1, 10).merge().setValue("🔍  VERIFICACIÓN VS SNAPSHOT").setBackground(C.DARK).setFontColor(C.GREEN).setFontWeight("bold").setHorizontalAlignment("center");
+    ws.clear();
+    ws.clearContents();
+    ws.clearFormats();
+    ws.getRange(1, 1, 1, 9).merge().setValue("🔍  VERIFICACIÓN 9AM — Score Hoy vs Inicial").setBackground(C.DARK).setFontColor(C.GREEN).setFontWeight("bold").setHorizontalAlignment("center");
+    ws.setRowHeight(1, 34);
+
+    ws.getRange(2, 1, 1, 9).merge().setValue("Última verificación: (pendiente)")
+        .setBackground(C.ACCENT).setFontColor(C.YELLOW).setFontWeight("bold").setFontSize(9);
+    ws.setRowHeight(2, 20);
+
+    var hdrs = ["Ticker", "Empresa", "Score Inicial", "Score Hoy", "Diff", "Filtros Hoy", "Precio", "WL", "Estado"];
+    var wCols = [70, 140, 85, 75, 55, 200, 70, 50, 70];
+    for (var i = 0; i < hdrs.length; i++) {
+        ws.getRange(4, i + 1).setValue(hdrs[i]).setBackground(C.DARK).setFontColor(C.WHITE)
+            .setFontWeight("bold").setHorizontalAlignment("center").setWrap(true);
+        ws.setColumnWidth(i + 1, wCols[i]);
+    }
+    ws.setRowHeight(4, 36);
+    ws.setFrozenRows(4);
 }
 
 /**

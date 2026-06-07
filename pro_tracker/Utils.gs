@@ -85,16 +85,16 @@ function fetchPrecioYahoo(ticker) {
 function yaRegistradoHoy(horaET) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var log = ss.getSheetByName(LOG_SHEET);
-    if (!log || log.getLastRow() < 2) return false;
+    if (!log || log.getLastRow() < 3) return false;
 
     var info = getInfoTiempoNY();
     var fechaHoyStr = Utilities.formatDate(info.fecha, "GMT", "yyyy-MM-dd");
 
     var lastRow = log.getLastRow();
-    if (lastRow < 2) return false;
+    if (lastRow < 3) return false;
 
-    // Optimizamos: solo leemos las últimas ~100 filas
-    var startRow = Math.max(2, lastRow - 100);
+    // Optimizamos: solo leemos las últimas ~100 filas (datos empiezan en fila 3)
+    var startRow = Math.max(3, lastRow - 100);
     var numRows = lastRow - startRow + 1;
     if (numRows <= 0) return false;
 
