@@ -311,6 +311,9 @@ function act_ganadores() { obtenerFiltro(FILTROS[9]); }
 function act_volumen() { obtenerFiltro(FILTROS[10]); }
 
 /**
+ * Crea el menú personalizado en la hoja de cálculo.
+ */
+/**
  * Actualiza todos los timestamps del Dashboard recorriendo cada filtro.
  */
 function actualizarTimestampsDashboard() {

@@ -31,6 +31,8 @@ function onOpen() {
         .addItem("🕒 Sincronizar próximo reporte", "programarSiguienteCheck")
         .addSeparator()
         .addItem("🔍 Verificar semana", "verificarSemana")
+        .addItem("📱 Probar Reporte 9AM (WhatsApp)", "probarReporte9AM")
+        .addSeparator()
         .addItem("📊 Registrar precios ahora (manual)", "registrarPreciosManual")
         .addItem("📋 Generar Reporte Viernes", "generarReporteViernes")
         .addSeparator()
@@ -313,6 +315,22 @@ function eliminarTriggersVerificacion() {
             ScriptApp.deleteTrigger(t);
         }
     });
+}
+
+/**
+ * Wrapper para probar el reporte de verificación 9AM manualmente.
+ * Envía el mismo mensaje que se enviaría automáticamente.
+ */
+function probarReporte9AM() {
+    var ui = SpreadsheetApp.getUi();
+    var resp = ui.alert(
+        "📱 Prueba de WhatsApp",
+        "Se enviará el reporte de verificación 9AM a tu WhatsApp ahora.\n\n¿Continuar?",
+        ui.ButtonSet.YES_NO
+    );
+    if (resp === ui.Button.YES) {
+        reporteVerificacion9AM();
+    }
 }
 
 /**
