@@ -1,6 +1,9 @@
 // ============================================================
 // MTM TRACKER V4 — INSTALACIÓN AUTOMÁTICA (ONE-CLICK)
 // ============================================================
+// ⚠️  IMPORTANTE: NO copiar este archivo a Apps Script.
+//     Este archivo es solo referencia local (módulo).
+//     En Apps Script usá UNICAMENTE: TODO_EN_UNO_V4.gs
 // Ejecutar esta función UNA SOLA VEZ para configurar todo.
 // Crea hojas, instala menú, y deja listo para usar.
 // ============================================================

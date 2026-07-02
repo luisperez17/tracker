@@ -1048,6 +1048,10 @@ function onOpen() {
                 .addItem("🔗 COMBINADO: CDI + V5", "generarRadarCombinado")
         )
         .addSubMenu(
+            ui.createMenu("📄 Fase 5 — PDF del Club")
+                .addItem("❓ Ver instrucciones (Claude.ai)", "mostrarInstruccionesFase5")
+        )
+        .addSubMenu(
             ui.createMenu("📧📱 Canal (ahora: " + canal.toUpperCase() + ")")
                 .addItem("✉️ Solo Email", "cambiarCanalEmail")
                 .addItem("💬 Solo WhatsApp", "cambiarCanalWhatsApp")
@@ -1065,6 +1069,7 @@ function onOpen() {
         .addSeparator()
         .addItem("⚡ Instalar trigger onEdit (autocompletar Tracker)", "instalarOnEditV4")
         .addItem("🏗️ Configurar hojas V4 (primera vez)", "configurarHojasV4")
+        .addItem("🔧 Reparar Score Log (17 headers)", "repararScoreLogV4")
         .addItem("🧹 Limpiar Radar Semanal", "limpiarRadarSemanal")
         .addSeparator()
         .addItem("📊 Actualizar Dashboard V4", "generarRadarSemanal")
@@ -1338,6 +1343,54 @@ function diagnosticarSistemaV4() {
     reporte.push("📱 WHATSAPP (test con 'Hola'):");
     var wsOk = enviarWhatsAppV4("Hola");
     reporte.push("   Resultado: " + (wsOk ? "✅ Enviado" : "❌ Falló — revisá WS_PHONE y WS_API_KEY"));
+    reporte.push("");
+
+    // 8. Score Log — verificar columnas reales
+    reporte.push("📊 SCORE LOG:");
+    var log = ss.getSheetByName(SHEET_LOG);
+    if (log) {
+        var hdr = log.getRange(2, 1, 1, log.getLastColumn()).getValues()[0];
+        reporte.push("   Columnas detectadas: " + hdr.length);
+        reporte.push("   Headers: " + hdr.slice(0, 6).join(", ") + "...");
+        if (hdr.length === 17) {
+            reporte.push("   ✅ Score Log tiene 17 columnas (versión actualizada)");
+        } else if (hdr.length === 8) {
+            reporte.push("   ❌ Score Log tiene SOLO 8 columnas (versión VIEJA)");
+            reporte.push("   💡 Motivo: Apps Script ejecutó una versión vieja de 'formatearScoreLogV4'");
+            reporte.push("   💡 Posible causa: Tenés varios archivos .gs con funciones duplicadas");
+            reporte.push("   🔧 SOLUCIÓN RÁPIDA: Andá al panel izquierdo de Apps Script");
+            reporte.push("      → Dejá SOLO el archivo 'TODO_EN_UNO_V4'");
+            reporte.push("      → Borrá todos los demás archivos .gs");
+            reporte.push("      → Guardá con Ctrl+S y ejecutá 'Configurar hojas V4' de nuevo");
+            errores.push("Score Log desactualizado: Apps Script ejecutó código viejo");
+        } else {
+            reporte.push("   ⚠️ Columnas inesperadas: " + hdr.length);
+        }
+        reporte.push("   Registros guardados: " + (log.getLastRow() - 2));
+    } else {
+        reporte.push("   ❌ Score Log no existe");
+        errores.push("Falta Score Log");
+    }
+    reporte.push("");
+
+    // 9. Verificación de versión del código
+    reporte.push("💻 VERSIÓN DEL CÓDIGO:");
+    var funcionesEsperadas = ["formatearScoreLogV4", "guardarScoreLogV4", "generarRadarCombinado", "mostrarInstruccionesFase5", "calcularScoreV4"];
+    var funcionesEncontradas = 0;
+    for (var fIdx = 0; fIdx < funcionesEsperadas.length; fIdx++) {
+        try {
+            eval(funcionesEsperadas[fIdx]); // Esto lanzará error si no existe
+            funcionesEncontradas++;
+        } catch (e) {}
+    }
+    reporte.push("   Funciones nuevas detectadas: " + funcionesEncontradas + "/" + funcionesEsperadas.length);
+    if (funcionesEncontradas < funcionesEsperadas.length) {
+        reporte.push("   ❌ Código NO está actualizado. Faltan funciones nuevas.");
+        reporte.push("   💡 Copiá de nuevo TODO_EN_UNO_V4.gs completo y guardá (Ctrl+S)");
+        errores.push("Código desactualizado. Recopiá TODO_EN_UNO_V4.gs");
+    } else {
+        reporte.push("   ✅ Código actualizado (todas las funciones presentes)");
+    }
     reporte.push("");
 
     // Resumen
@@ -1701,4 +1754,63 @@ function desinstalarV4() {
         if (ws) ss.deleteSheet(ws);
     }
     ui.alert("Hojas V4 eliminadas. Recarga la página para quitar el menú.");
+}
+
+// ============================================================
+// FASE 5 — INSTRUCCIONES PDF DEL CLUB (Manual con Claude.ai)
+// ============================================================
+/**
+ * Repara los headers del Score Log sin borrar datos.
+ * Útil cuando Apps Script ejecutó una versión vieja y los headers quedaron desactualizados.
+ */
+function repararScoreLogV4() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var log = ss.getSheetByName(SHEET_LOG);
+    if (!log) {
+        ss.insertSheet(SHEET_LOG);
+        log = ss.getSheetByName(SHEET_LOG);
+    }
+
+    // Borrar SOLO fila 1 y 2 (título + headers), no los datos
+    log.getRange(1, 1, 2, 17).clear();
+
+    // Reescribir título
+    log.getRange(1, 1, 1, 17).merge().setValue("📊  SCORE LOG V4 — Histórico completo (NUNA BORRAR)")
+        .setBackground(C4.DARK).setFontColor(C4.GREEN).setFontWeight("bold").setHorizontalAlignment("center");
+
+    // Reescribir headers
+    var hdrs = ["FECHA", "TICKER", "PRECIO", "SCORE V4", "ESTADO", "ENTRADA", "STOP", "TARGET", "R/R",
+                "PERF W", "PERF M", "SECTOR", "DIST ATH", "ATR/LOW", "SCTR", "FUENTE", "TRACKER?"];
+    var anchos = [90, 70, 70, 72, 80, 72, 72, 72, 55, 65, 65, 110, 70, 70, 55, 90, 65];
+
+    for (var i = 0; i < hdrs.length; i++) {
+        log.getRange(2, i + 1).setValue(hdrs[i]).setBackground(C4.ACCENT).setFontColor(C4.WHITE)
+            .setFontWeight("bold").setHorizontalAlignment("center");
+        log.setColumnWidth(i + 1, anchos[i]);
+    }
+    log.setFrozenRows(2);
+
+    SpreadsheetApp.getActiveSpreadsheet().toast("Score Log reparado. Verificá los 17 headers.", "✅ Reparación", 5);
+}
+
+function mostrarInstruccionesFase5() {
+    var ui = SpreadsheetApp.getUi();
+    var mensaje =
+        '📄 FASE 5 — Extraer tickers del PDF del Club\n\n' +
+        'Este proceso es MANUAL (no automatizado) porque los PDFs del Club\n' +
+        'suelen tener las tablas como imágenes, no como texto seleccionable.\n\n' +
+        'PASOS (2 minutos):\n\n' +
+        '1️⃣ Recibís el PDF del Club por email.\n' +
+        '2️⃣ Andá a claude.ai e iniciá sesión (gratuito).\n' +
+        '3️⃣ Hacé clic en el clip 📎 y subí el PDF.\n' +
+        '4️⃣ Copiá el prompt de este documento y pegalo en el chat:\n' +
+        '   → v4/docs/PROMPT_CLAUDE_PDF.md\n\n' +
+        '5️⃣ Claude extraerá la tabla en formato TSV.\n' +
+        '6️⃣ Copiá la tabla y pegala en la celda A5 de "📋 WL CDI".\n\n' +
+        '💡 BONUS: Después, preguntale a Claude:\n' +
+        '"¿Qué sectores están más representados? ¿Qué tickers son nuevos?"\n\n' +
+        'Alternativa si Claude no funciona: usá ChatGPT (también gratuito).\n' +
+        'Alternativa si el PDF no sube: tomá screenshots y adjuntalas.';
+
+    ui.alert('📄 Fase 5 — PDF del Club', mensaje, ui.ButtonSet.OK);
 }

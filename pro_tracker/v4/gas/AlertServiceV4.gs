@@ -1,6 +1,9 @@
 // ============================================================
 // MTM TRACKER V4 — ALERTAS DUAL: EMAIL + WHATSAPP
 // ============================================================
+// ⚠️  IMPORTANTE: NO copiar este archivo a Apps Script.
+//     Este archivo es solo referencia local (módulo).
+//     En Apps Script usá UNICAMENTE: TODO_EN_UNO_V4.gs
 
 /**
  * Envía resumen dual según CANAL_ALERTA configurado.

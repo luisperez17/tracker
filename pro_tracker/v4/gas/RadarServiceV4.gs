@@ -1,6 +1,9 @@
 // ============================================================
 // MTM TRACKER V4 — MOTOR RADAR SEMANAL
 // ============================================================
+// ⚠️  IMPORTANTE: NO copiar este archivo a Apps Script.
+//     Este archivo es solo referencia local (módulo).
+//     En Apps Script usá UNICAMENTE: TODO_EN_UNO_V4.gs
 
 /**
  * Función maestra: genera el Radar Semanal desde el WL CDI.

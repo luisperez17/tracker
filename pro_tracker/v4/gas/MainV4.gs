@@ -1,6 +1,9 @@
 // ============================================================
 // MTM TRACKER V4 — MENÚ PRINCIPAL Y PUNTOS DE ENTRADA
 // ============================================================
+// ⚠️  IMPORTANTE: NO copiar este archivo a Apps Script.
+//     Este archivo es solo referencia local (módulo).
+//     En Apps Script usá UNICAMENTE: TODO_EN_UNO_V4.gs
 
 /**
  * Crea el menú personalizado al abrir la hoja.
@@ -14,6 +17,10 @@ function onOpen() {
                 .addItem("📋 Desde WL CDI (Club)", "generarRadarSemanal")
                 .addItem("🤖 Desde WL V5 (Motor Propio)", "generarRadarDesdeV5")
                 .addItem("🔗 COMBINADO: CDI + V5", "generarRadarCombinado")
+        )
+        .addSubMenu(
+            ui.createMenu("📄 Fase 5 — PDF del Club")
+                .addItem("❓ Ver instrucciones (Claude.ai)", "mostrarInstruccionesFase5")
         )
         .addSubMenu(
             ui.createMenu("📧📱 Canal de Alertas (ahora: " + canal.toUpperCase() + ")")
@@ -33,6 +40,7 @@ function onOpen() {
         .addSeparator()
         .addItem("⚡ Instalar trigger onEdit (autocompletar Tracker)", "instalarOnEditV4")
         .addItem("🏗️ Configurar hojas V4 (primera vez)", "configurarHojasV4")
+        .addItem("🔧 Reparar Score Log (17 headers)", "repararScoreLogV4")
         .addItem("🧹 Limpiar Radar Semanal", "limpiarRadarSemanal")
         .addSeparator()
         .addItem("📊 Actualizar Dashboard V4", "generarRadarSemanal")
@@ -372,4 +380,63 @@ function formatearDashboardV4(ws) {
         ws.getRange(3 + i, 2).setValue(metrics[i][1]).setBackground(C4.LBLUE).setFontWeight("bold").setHorizontalAlignment("center");
         ws.getRange(3 + i, 3).setValue(metrics[i][2]).setBackground(C4.LIGHT).setFontSize(9).setFontColor(C4.GRAY);
     }
+}
+
+// ============================================================
+// FASE 5 — INSTRUCCIONES PDF DEL CLUB (Manual con Claude.ai)
+// ============================================================
+function mostrarInstruccionesFase5() {
+    var ui = SpreadsheetApp.getUi();
+    var mensaje =
+        '📄 FASE 5 — Extraer tickers del PDF del Club\n\n' +
+        'Este proceso es MANUAL (no automatizado) porque los PDFs del Club\n' +
+        'suelen tener las tablas como imágenes, no como texto seleccionable.\n\n' +
+        'PASOS (2 minutos):\n\n' +
+        '1️⃣ Recibís el PDF del Club por email.\n' +
+        '2️⃣ Andá a claude.ai e iniciá sesión (gratuito).\n' +
+        '3️⃣ Hacé clic en el clip 📎 y subí el PDF.\n' +
+        '4️⃣ Copiá el prompt de este documento y pegalo en el chat:\n' +
+        '   → v4/docs/PROMPT_CLAUDE_PDF.md\n\n' +
+        '5️⃣ Claude extraerá la tabla en formato TSV.\n' +
+        '6️⃣ Copiá la tabla y pegala en la celda A5 de "📋 WL CDI".\n\n' +
+        '💡 BONUS: Después, preguntale a Claude:\n' +
+        '"¿Qué sectores están más representados? ¿Qué tickers son nuevos?"\n\n' +
+        'Alternativa si Claude no funciona: usá ChatGPT (también gratuito).\n' +
+        'Alternativa si el PDF no sube: tomá screenshots y adjuntalas.';
+
+    ui.alert('📄 Fase 5 — PDF del Club', mensaje, ui.ButtonSet.OK);
+}
+
+/**
+ * Repara los headers del Score Log sin borrar datos.
+ * Útil cuando Apps Script ejecutó una versión vieja y los headers quedaron desactualizados.
+ */
+function repararScoreLogV4() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var log = ss.getSheetByName(SHEET_LOG);
+    if (!log) {
+        ss.insertSheet(SHEET_LOG);
+        log = ss.getSheetByName(SHEET_LOG);
+    }
+
+    // Borrar SOLO fila 1 y 2 (título + headers), no los datos
+    log.getRange(1, 1, 2, 17).clear();
+
+    // Reescribir título
+    log.getRange(1, 1, 1, 17).merge().setValue("📊  SCORE LOG V4 — Histórico completo (NUNA BORRAR)")
+        .setBackground(C4.DARK).setFontColor(C4.GREEN).setFontWeight("bold").setHorizontalAlignment("center");
+
+    // Reescribir headers
+    var hdrs = ["FECHA", "TICKER", "PRECIO", "SCORE V4", "ESTADO", "ENTRADA", "STOP", "TARGET", "R/R",
+                "PERF W", "PERF M", "SECTOR", "DIST ATH", "ATR/LOW", "SCTR", "FUENTE", "TRACKER?"];
+    var anchos = [90, 70, 70, 72, 80, 72, 72, 72, 55, 65, 65, 110, 70, 70, 55, 90, 65];
+
+    for (var i = 0; i < hdrs.length; i++) {
+        log.getRange(2, i + 1).setValue(hdrs[i]).setBackground(C4.ACCENT).setFontColor(C4.WHITE)
+            .setFontWeight("bold").setHorizontalAlignment("center");
+        log.setColumnWidth(i + 1, anchos[i]);
+    }
+    log.setFrozenRows(2);
+
+    SpreadsheetApp.getActiveSpreadsheet().toast("Score Log reparado. Verificá los 17 headers.", "✅ Reparación", 5);
 }

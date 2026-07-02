@@ -1,6 +1,9 @@
 // ============================================================
 // MTM TRACKER V4 — SERVICIO YAHOO FINANCE
 // ============================================================
+// ⚠️  IMPORTANTE: NO copiar este archivo a Apps Script.
+//     Este archivo es solo referencia local (módulo).
+//     En Apps Script usá UNICAMENTE: TODO_EN_UNO_V4.gs
 
 /**
  * Obtiene histórico de precios desde Yahoo Finance para calcular SMA y ATH.

@@ -18,8 +18,9 @@ v4/
 │   ├── MainV4.gs
 │   └── SetupV4.gs
 ├── colab/
-│   ├── MTM_V4_Analysis.ipynb      ← Análisis histórico (Viernes, Fase 6)
-│   └── MTM_V5_Motor_Propio.ipynb  ← Scanner independiente (Domingo, Fase 3)
+│   ├── MTM_V4_Analysis.ipynb      ← Análisis histórico (Viernes)
+│   ├── MTM_V5_Motor_Propio.ipynb  ← Scanner independiente (Domingo, Fase 3)
+│   └── MTM_V6_Backtesting.ipynb   ← Backtesting Score Log (Viernes, Fase 6)
 ├── docs/
 │   ├── PASO_A_PASO.md
 │   ├── PLAN_TRABAJO.md
@@ -221,9 +222,50 @@ Guardá la respuesta en un documento de Drive para análisis futuro (backtesting
 | **Fase 2** | Motor Propio V5 (Colab) | ✅ **Listo** | Scanner independiente del S&P 500 con Score V4 |
 | **Fase 3** | Integración V5 → Radar | ✅ **Listo** | WL V5 se puede usar para generar Radar (solo o combinado) |
 | **Fase 4** | Independencia total | ✅ **Listo** | Radar Combinado (CDI + V5) sin depender de una sola fuente |
-| **Fase 5** | Extractor PDF | 🚧 **Pendiente** | Leer automáticamente el PDF del Club y popular `📋 WL CDI` |
-| **Fase 6** | Backtesting | 🚧 **Pendiente** | Analizar Score Log en Colab: win rate, curva de equity, drawdown |
+| **Fase 5** | Extractor PDF (Claude) | ✅ **Listo** | Manual: subís PDF a Claude.ai, copiás resultado a `📋 WL CDI` |
+| **Fase 6** | Backtesting | ✅ **Listo** | Colab lee Score Log → win rate, curva de equity, drawdown, sector, R/R |
 | **Fase 7** | Universo Propio | 🚧 **Pendiente** | Ampliar Motor Propio con NASDAQ-100 + Russell 2000 + tickers CDI históricos |
+
+---
+
+## 📊 Fase 6: Backtesting (Viernes)
+
+### Flujo de trabajo
+
+1. **Ejecutar notebook** `MTM_V6_Backtesting.ipynb` en Colab
+2. **Pegar `SPREADSHEET_ID`** en el Paso 1
+3. **Ejecutar todo** (`Entorno de ejecución → Ejecutar todo`)
+4. Esperar 3-5 minutos (descarga precios de Yahoo Finance)
+
+### Resultados generados
+
+El notebook genera automáticamente:
+
+| Reporte | Formato | Ubicación | Detalle |
+|---|---|---|---|
+| Resumen ejecutivo | `.txt` | `Drive/MTM_V4_Resultados/` | Métricas, win rates, top 10, conclusiones |
+| Reporte completo | `.html` | Descarga manual de Colab | Con gráficos y tablas (más completo) |
+| Notebook editable | `.ipynb` | Descarga manual de Colab | Para re-ejecutar otra semana |
+
+### Cómo guardar el HTML (recomendado)
+
+1. En Colab: `Archivo → Descargar → Descargar .html`
+2. Guardarlo en tu Google Drive: `MTM_V4_Resultados/`
+3. Se abre en Chrome/Firefox y tiene TODO: gráficos, tablas, métricas
+4. Para PDF: Abrí el HTML → `Ctrl+P → Guardar como PDF`
+
+### Qué analiza el backtesting
+
+- **Todo el Radar**: Cómo funcionó el sistema en general
+- **Mis trades**: Solo los tickers que pusiste en el Tracker (TRACKER? = SÍ)
+- **Top 3 por Score**: Simulación si solo operabas las 3 mejores
+- **Por nivel**: Alta vs Media vs Base confianza
+- **Por sector**: Cuál sector tuvo mejor win rate (si hay datos)
+- **Por R/R**: Si setups con mejor R/R funcionaron más (si hay datos)
+- **Curva de equity**: Crecimiento simulado de $10,000
+- **Drawdown**: Máxima caída del capital
+
+> 💡 **Regla de oro:** Con menos de 20 trades las estadísticas no son significativas. Esperá 2-3 meses de datos antes de ajustar el sistema.
 
 ---
 
