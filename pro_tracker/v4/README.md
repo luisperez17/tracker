@@ -14,8 +14,9 @@ La V3 tenía un score que medía *"¿en cuántos filtros aparece?"*. La V4 mide 
 | **Score** | Suma de filtros coincidentes | Momentum + Técnico + WL |
 | **ATR/LOW** | Bonus opcional (+1.0) | Input principal de riesgo |
 | **Earnings** | No penalizaba | Penalización inminente |
-| **Alertas** | WhatsApp (roto) | Email nativo (gratis) |
+| **Alertas** | WhatsApp (roto) | Email + WhatsApp dual (4x/día) |
 | **Análisis** | Solo reporte viernes básico | Python/Colab + GAS híbrido |
+| **Motor Propio** | No tenía | Scanner V5 independiente (S&P 500) |
 
 ---
 
@@ -32,32 +33,43 @@ La V3 tenía un score que medía *"¿en cuántos filtros aparece?"*. La V4 mide 
 ### Flujo de trabajo semanal
 
 ```
+SÁBADO
+  │
+  └──► Recibís el PDF del Club de Inversionistas (Fase 5)
+         • Subís el PDF a Claude (claude.ai, cuenta gratuita)
+         • Copiás el prompt de `v4/docs/PROMPT_CLAUDE_PDF.md`
+         • Claude extrae la tabla → copiás y pegás en "📋 WL CDI"
+
 DOMINGO
   │
-  ├──► Pegas el WL CDI en hoja "📋 WL CDI"
-  ├──► Ejecutas "🔄 Actualizar Radar V4" (GAS)
+  ├──► Ejecutás el **Motor Propio V5** en Colab (S&P 500)
+  │      • Genera "📋 WL V5 Generado" con Score V4 incluido
+  │
+  ├──► Verificás que "📋 WL CDI" tenga los tickers del Club (Fase 5)
+  ├──► Ejecutás "🔄 Generar Radar Semanal" (GAS) — 3 opciones:
+  │      • 📋 Solo WL CDI (Club)
+  │      • 🤖 Solo WL V5 (Motor Propio)
+  │      • 🔗 COMBINADO: CDI + V5 mergeados (prioriza CDI)
   │      • Consulta Yahoo Finance: precio, SMA20/50/200, ATH
-  │      • Consulta Finviz: Perf Week/Month/Quarter
-  │      • Calcula Score V4 para todo el WL
-  │      • Escribe hoja "🎯 Radar Semanal"
+  │      • Calcula Score V4 + Setup completo (Entrada/Stop/Target/R/R)
+  │      • Escribe hoja "🎯 Radar Semanal" (fuente única de verdad)
   │
-  └──► Revisas el Radar, marcas 2-3 para trackear + 10 seguimiento ligero
+  └──► Revisás el Radar, marcás 2-3 para trackear
 
-LUNES-VIERNES (3x al día: 10am, 1pm, 3:45pm ET)
+LUNES-VIERNES (4x al día: 9:30, 11:30, 13:30, 15:30 ET)
   │
-  └──► Trigger automático:
-         • Lee solo los marcados
-         • Compara precio vs Entrada/Stop/Target
-         • Email si: 🎯 Target hit | 🛑 Stop hit | 📈 Breakout
+  └──► Alertas automáticas (Email + WhatsApp):
+         • Lee solo los marcados con Track=TRUE en Tracker
+         • Compara precio vs Entrada/Stop/Target del Radar
+         • Alerta si: 🎯 Target hit | 🛑 Stop hit | 📈 Breakout | 📉 Danger
 
 VIERNES
   │
-  ├──► Ejecutas notebook Colab:
+  ├──► Ejecutás notebook Colab (análisis histórico, opcional Fase 6)
   │      • Lee Score Log completo
   │      • Curva de equity, win rate, drawdown
-  │      • ¿Qué setup funcionó mejor?
   │
-  └──► Guardas PDF del análisis en Drive
+  └──► Guardás PDF del análisis en Drive
 ```
 
 ---

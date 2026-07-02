@@ -79,6 +79,133 @@ function leerWLCDI() {
 }
 
 /**
+ * Genera el Radar Semanal pero usando la WL V5 Generado (Motor Propio en Colab)
+ * en vez de la WL CDI del Club.
+ */
+function generarRadarDesdeV5() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    ss.toast("Iniciando Radar desde WL V5...", "🎯", 30);
+
+    var wlData = leerWLV5();
+    if (!wlData || wlData.length === 0) {
+        ss.toast("No hay datos en 📋 WL V5 Generado. Ejecutá el Colab primero.", "⚠️", 6);
+        return;
+    }
+
+    ss.toast("Analizando " + wlData.length + " tickers desde WL V5...", "📊", 30);
+
+    var resultados = [];
+    for (var i = 0; i < wlData.length; i++) {
+        var item = wlData[i];
+        ss.toast(item.ticker + "...", "⏳", 2);
+        var analisis = analizarTickerV4(item);
+        if (analisis) resultados.push(analisis);
+        if (i < wlData.length - 1) Utilities.sleep(800);
+    }
+
+    var filtrados = resultados.filter(function(r) { return r.scoreV4 >= UMBRAL_MIN_SCORE; });
+    filtrados.sort(function(a, b) { return b.scoreV4 - a.scoreV4; });
+
+    escribirRadarSemanal(ss, filtrados);
+    actualizarDashboardV4(ss, filtrados);
+    guardarScoreLogV4(ss, filtrados);
+
+    ss.toast("Radar V5 listo: " + filtrados.length + " candidatas", "✅", 5);
+}
+
+/**
+ * Genera el Radar COMBINANDO ambas fuentes: WL CDI + WL V5.
+ * Elimina duplicados (prioriza datos del CDI si un ticker está en ambas).
+ * Calcula setup completo (Entrada, Stop, Target, R/R) para todos.
+ */
+function generarRadarCombinado() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    ss.toast("Iniciando Radar COMBINADO (CDI + V5)...", "🎯", 30);
+
+    var wlCDI = leerWLCDI();
+    var wlV5 = leerWLV5();
+
+    if ((!wlCDI || wlCDI.length === 0) && (!wlV5 || wlV5.length === 0)) {
+        ss.toast("No hay datos ni en WL CDI ni en WL V5. Pegá al menos una fuente.", "⚠️", 6);
+        return;
+    }
+
+    // Merge: ticker → datos (prioridad CDI)
+    var mergeMap = {};
+
+    if (wlV5) {
+        for (var i = 0; i < wlV5.length; i++) {
+            mergeMap[wlV5[i].ticker] = wlV5[i];
+        }
+    }
+
+    if (wlCDI) {
+        for (var i = 0; i < wlCDI.length; i++) {
+            mergeMap[wlCDI[i].ticker] = wlCDI[i]; // Sobrescribe con CDI (prioridad)
+        }
+    }
+
+    var unicos = Object.keys(mergeMap).map(function(tk) { return mergeMap[tk]; });
+    ss.toast("Analizando " + unicos.length + " tickers combinados (CDI+V5)...", "📊", 30);
+
+    var resultados = [];
+    for (var i = 0; i < unicos.length; i++) {
+        var item = unicos[i];
+        ss.toast(item.ticker + "...", "⏳", 2);
+        var analisis = analizarTickerV4(item);
+        if (analisis) resultados.push(analisis);
+        if (i < unicos.length - 1) Utilities.sleep(800);
+    }
+
+    var filtrados = resultados.filter(function(r) { return r.scoreV4 >= UMBRAL_MIN_SCORE; });
+    filtrados.sort(function(a, b) { return b.scoreV4 - a.scoreV4; });
+
+    escribirRadarSemanal(ss, filtrados);
+    actualizarDashboardV4(ss, filtrados);
+    guardarScoreLogV4(ss, filtrados);
+
+    var deCDI = wlCDI ? wlCDI.length : 0;
+    var deV5 = wlV5 ? wlV5.length : 0;
+    ss.toast("Radar COMBINADO listo: " + filtrados.length + " candidatas (CDI:" + deCDI + " + V5:" + deV5 + ")", "✅", 5);
+}
+
+/**
+ * Lee la WL V5 Generado (del Motor Propio en Colab).
+ * Formato V5: Ticker(0), Empresa(1), Sector(2), Score V4(3), ATR/LOW(4), Earnings(5),
+ *          Perf Sem %(6), Perf Mes %(7), SCTR(8), RSI(9), ADX(10), Beta(11), ATR(12), EMA20(13)
+ */
+function leerWLV5() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ws = ss.getSheetByName('📋 WL V5 Generado');
+    if (!ws || ws.getLastRow() < 2) return [];
+
+    // Leer 14 columnas (incluye Score V4 en col D)
+    var data = ws.getRange(2, 1, ws.getLastRow() - 1, 14).getValues();
+    var lista = [];
+    for (var i = 0; i < data.length; i++) {
+        var tk = String(data[i][0]).trim().toUpperCase();
+        if (!tk || tk === "Ticker") continue;
+        lista.push({
+            ticker: tk,
+            empresa: String(data[i][1] || "").trim(),
+            sector: String(data[i][2] || "").trim(),
+            scoreV4: parseFloat(data[i][3]) || null,
+            atrLow: String(data[i][4] || "").trim(),
+            earnings: String(data[i][5] || "").trim(),
+            perfWeekRaw: data[i][6],
+            perfMonthRaw: data[i][7],
+            sctrRaw: data[i][8],
+            rsiRaw: data[i][9],
+            adxRaw: data[i][10],
+            betaRaw: data[i][11],
+            atr14Raw: data[i][12],
+            ema20Raw: data[i][13]
+        });
+    }
+    return lista;
+}
+
+/**
  * Analiza un ticker del WL: calcula Score V4 + datos técnicos.
  */
 function analizarTickerV4(item) {

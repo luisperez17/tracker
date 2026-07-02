@@ -18,12 +18,13 @@ v4/
 │   ├── MainV4.gs
 │   └── SetupV4.gs
 ├── colab/
-│   ├── MTM_V4_Analysis.ipynb     ← Análisis histórico (Viernes)
-│   └── MTM_V5_Motor_Propio.ipynb ← Scanner independiente (Domingo)
+│   ├── MTM_V4_Analysis.ipynb      ← Análisis histórico (Viernes, Fase 6)
+│   └── MTM_V5_Motor_Propio.ipynb  ← Scanner independiente (Domingo, Fase 3)
 ├── docs/
 │   ├── PASO_A_PASO.md
 │   ├── PLAN_TRABAJO.md
-│   └── WL_PROPIO.md
+│   ├── WL_PROPIO.md
+│   └── PROMPT_CLAUDE_PDF.md     ← Prompt para extraer PDF del Club (Fase 5)
 └── README.md
 ```
 
@@ -109,16 +110,48 @@ v4/
    - **Paso 1:** Te aparece un link → hacé clic → elegí tu cuenta de Google → "Permitir".
    - **Paso 2:** Pegá el `SPREADSHEET_ID` de tu hoja.
    - **Paso 3-8:** Corren solos.
-4. El resultado se escribe en la hoja `📋 WL V5 Generado`.
+4. El resultado se escribe en la hoja `📋 WL V5 Generado` con columna **Score V4** incluida (ordenada de mayor a menor).
 
-### Lunes mañana: Pegar WL CDI
+### Sábado: Recibir PDF del Club y extraer tickers (Fase 5)
 
-1. Recibís el PDF del Club.
-2. Copiá la tabla y pegala en la hoja `📋 WL CDI` (desde fila 5).
+> **Nota:** Los PDFs del Club suelen tener tablas como **imágenes** (no texto seleccionable). La mejor solución es usar **Claude** (gratuito) que puede ver el PDF como un humano.
+
+**Pasos (2 minutos):**
+1. Recibís el PDF del Club por email.
+2. Andá a [claude.ai](https://claude.ai) e iniciá sesión con tu cuenta gratuita.
+3. Hacé clic en el **clip 📎** para adjuntar archivos y subí el PDF.
+4. Copiá el prompt de `v4/docs/PROMPT_CLAUDE_PDF.md` y pegalo en el chat.
+5. Claude extraerá la tabla y te la devolverá en formato listo para copiar.
+6. Copiá la tabla, andá a tu Google Sheet `📋 WL CDI`, y pegala en la celda **A5**.
+
+**Si Claude no está disponible:**
+- Usá [ChatGPT](https://chatgpt.com) con el mismo prompt (también permite subir archivos en la versión gratuita).
+
+**Si el PDF no se puede subir:**
+- Tomá **screenshots** de las páginas con la tabla y adjuntalas en el chat.
+
+**Bonus:** Después de extraer la tabla, preguntale a Claude:
+```
+Ahora analizá este PDF cualitativamente: ¿Qué sectores están más representados? ¿Qué tickers son nuevos vs semanas anteriores? ¿Qué catalysts monitorea el Club?
+```
+Guardá la respuesta en un documento de Drive para análisis futuro (backtesting cualitativo).
+
+### Lunes mañana: Revisar WL CDI
+
+1. Verificá que `📋 WL CDI` tenga los tickers y datos del Club.
+2. Si algo falta (SCTR, RSI, etc.), no importa — el Radar lo completará con Yahoo Finance al generarse.
 
 ### Lunes mañana: Generar Radar
 
-1. Menú: `🎯 MTM Tracker V4 → 🔄 Generar Radar Semanal`.
+**3 opciones en el menú:**
+
+| Opción | Cuándo usarla |
+|---|---|
+| `📋 Desde WL CDI (Club)` | Tenés la lista del Club y querés solo esa |
+| `🤖 Desde WL V5 (Motor Propio)` | No tenés CDI o querés probar el scanner solo |
+| `🔗 COMBINADO: CDI + V5` | **Recomendado** — mergea ambas fuentes, prioriza CDI si hay duplicados |
+
+1. Menú: `🎯 MTM Tracker V4 → 🔄 Generar Radar Semanal → [elegí opción]`.
 2. Esperá ~3-5 minutos (consulta Yahoo Finance ticker por ticker).
 3. Revisá el `🎯 Radar Semanal`:
    - 🟢 Alta Confianza (Score ≥ 4.5)
@@ -127,9 +160,9 @@ v4/
 
 ### Lunes mediodía: Tracker Diario
 
-1. Copiá tickers del Radar que vayas a operar.
+1. Copiá tickers del **🎯 Radar Semanal** que vayas a operar.
 2. Pegalos en `📈 Tracker Diario` (col A, fila 6+).
-3. Se autocompletan solos (Empresa, Sector, Score, Entrada, Stop, Target, R/R).
+3. Se autocompletan solos con **todo** (Empresa, Sector, Score, Entrada, Stop, Target, R/R) porque el Radar ya calculó el setup.
 4. Marcá el check en col E (Track) para recibir alertas.
 
 ### Martes–Viernes: Alertas automáticas
@@ -160,6 +193,7 @@ v4/
 | **Origen** | Club de Inversionistas | Algoritmo propio (S&P 500) |
 | **Criterio** | Curado humano + eventos | Momentum + SMA + ATR |
 | **Tamaño** | ~80 tickers | ~200-500 tickers |
+| **Score V4** | ✅ Sí | ✅ Sí (calculado en Colab) |
 | **SCTR/ADX** | ✅ Incluido | ❌ No disponible gratis |
 | **Earnings exacto** | ✅ Sí | ⚠️ Aproximado (Yahoo) |
 | **Independencia** | Depende del Club | **100% independiente** |
@@ -176,6 +210,84 @@ v4/
 - [ ] Alertas instaladas (Menu → `📧📱 Instalar alertas automáticas`)
 - [ ] Dashboard automático activado (Menu → `📊 Activar Dashboard automático`)
 - [ ] Trigger onEdit instalado (Menu → `⚡ Instalar trigger onEdit`)
+
+---
+
+## 🗺️ Roadmap de Fases
+
+| Fase | Nombre | Estado | Descripción |
+|---|---|---|---|
+| **Fase 1** | Radar + Tracker + Alertas | ✅ **Listo** | WL CDI → Score V4 → Tracker → Email/WhatsApp |
+| **Fase 2** | Motor Propio V5 (Colab) | ✅ **Listo** | Scanner independiente del S&P 500 con Score V4 |
+| **Fase 3** | Integración V5 → Radar | ✅ **Listo** | WL V5 se puede usar para generar Radar (solo o combinado) |
+| **Fase 4** | Independencia total | ✅ **Listo** | Radar Combinado (CDI + V5) sin depender de una sola fuente |
+| **Fase 5** | Extractor PDF | 🚧 **Pendiente** | Leer automáticamente el PDF del Club y popular `📋 WL CDI` |
+| **Fase 6** | Backtesting | 🚧 **Pendiente** | Analizar Score Log en Colab: win rate, curva de equity, drawdown |
+| **Fase 7** | Universo Propio | 🚧 **Pendiente** | Ampliar Motor Propio con NASDAQ-100 + Russell 2000 + tickers CDI históricos |
+
+---
+
+## 💡 Recomendaciones prácticas (importante)
+
+### 1. Radar: mantenelo en ~20 tickers
+
+Un Radar de 50-80 tickers es inmanejable. **20 es el número máximo operable.**
+
+El Radar actual ya filtra por `Score >= 2.0`, pero eso puede generar muchos. Para forzar un Radar más enfocado:
+- **Opción A:** Usá el Radar Combinado y seleccioná manualmente las mejores 15-20 para el Tracker
+- **Opción B:** En el Colab, ajustá el filtro a `Score >= 3.5` (ya lo hace el Colab)
+- **Opción C:** En Apps Script, cambiá `UMBRAL_MIN_SCORE` de `2.0` a `3.5` para ver solo Alta + Media Confianza
+
+> 💡 **Regla:** Si una semana no hay 20 tickers que pasen el filtro, **no forzés**. Es señal de que el mercado está débil.
+
+### 2. Score Log: NUNCA lo borres
+
+El `📊 Score Log V4` es tu **oro para el backtesting.** Cada vez que generás el Radar, se guarda un snapshot con:
+- Fecha, ticker, precio, score
+- Setup sugerido (entrada, stop, target, R/R)
+- Sector, distancia ATH, ATR/LOW
+- Si estaba en el Tracker o no
+
+**Usos futuros (Fase 6):**
+- "Las de Score >= 4.5 tuvieron 65% de win rate"
+- "El setup Breakout funcionó mejor en tech que en energy"
+- "El CDI acertó un 12% más que el Motor Propio"
+
+> ⚠️ **NUNA borres ni limpies esta hoja.** Acumulá datos por al menos 3 meses antes de hacer análisis estadístico.
+
+### 3. Del Radar al Tracker: filtrá en 3 pasos
+
+No metas TODO el Radar al Tracker. Sé selectivo:
+
+**Paso 1 — Filtro técnico (descarta):**
+- Score < 3.5 (Media o Base)
+- Earnings esta semana
+- R/R < 2.0
+- Precio < SMA200 (no está en tendencia)
+
+**Paso 2 — Filtro cualitativo (elegí):**
+- Conocés la empresa? Entendés su negocio?
+- Hay un catalyst visible esta semana?
+- El sector está de moda (rotación de mercado)?
+
+**Paso 3 — Tamaño de posición:**
+- **Máximo 2-3 posiciones por semana**
+- **Nunca más del 10% del capital por ticker**
+- Si tenés dudas, no entrés. Esperá a la siguiente semana.
+
+### 4. Comparación honesta: V3 vs V4
+
+| | V3 | V4 (actual) |
+|---|---|---|
+| **Cómo detecta** | 11 filtros Finviz automáticos | WL CDI humana + validación algorítmica |
+| **Por qué un ticker está** | ❌ Caja negra | ✅ Score transparente (4 pilares) |
+| **Estabilidad** | ❌ Cambiaba diario | ✅ CDI estable toda la semana |
+| **Alertas** | ❌ WhatsApp roto | ✅ Email + WhatsApp dual |
+| **Backup sin CDI** | ❌ No funcionaba | ✅ Motor Propio V5 |
+| **Setup** | ❌ No calculaba | ✅ Entrada/Stop/Target automático |
+| **Histórico** | ❌ Sin log | ✅ Score Log acumulativo |
+
+**Conclusión:** El V3 era útil pero era un scanner ciego. El V4 es un **sistema de trading híbrido**: humano + algoritmo. Es más lento de configurar la primera vez, pero es **más confiable y explicable**.
 
 ---
 

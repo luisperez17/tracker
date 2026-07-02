@@ -9,8 +9,12 @@ function onOpen() {
     var canal = getCanalAlertaV4();
     var ui = SpreadsheetApp.getUi();
     ui.createMenu("🎯 MTM Tracker V4")
-        .addItem("🔄 Generar Radar Semanal", "generarRadarSemanal")
-        .addSeparator()
+        .addSubMenu(
+            ui.createMenu("🔄 Generar Radar Semanal")
+                .addItem("📋 Desde WL CDI (Club)", "generarRadarSemanal")
+                .addItem("🤖 Desde WL V5 (Motor Propio)", "generarRadarDesdeV5")
+                .addItem("🔗 COMBINADO: CDI + V5", "generarRadarCombinado")
+        )
         .addSubMenu(
             ui.createMenu("📧📱 Canal de Alertas (ahora: " + canal.toUpperCase() + ")")
                 .addItem("✉️ Solo Email", "cambiarCanalEmail")
@@ -106,7 +110,7 @@ function limpiarRadarSemanal() {
 
 /**
  * Trigger onEdit para el Tracker Diario.
- * Cuando pegás un ticker en col A, auto-completa datos desde el Radar.
+ * El Tracker SOLO lee del Radar Semanal (fuente única de verdad).
  */
 function onEditTrackerV4(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -126,13 +130,35 @@ function onEditTrackerV4(e) {
             valores = range.getValues();
         }
 
+        // ── El Tracker SOLO lee del Radar Semanal (fuente única de verdad) ──
         var radar = ss.getSheetByName(SHEET_RADAR);
         if (!radar || radar.getLastRow() < 6) {
-            ss.toast("Radar Semanal vacío. Ejecutá 'Generar Radar Semanal' primero.", "⚠️ Tracker", 5);
+            ss.toast("Radar Semanal vacío. Generá el Radar primero (CDI, V5 o Combinado).", "⚠️ Tracker", 6);
             return;
         }
 
         var radarData = radar.getRange(6, 1, radar.getLastRow() - 5, 18).getValues();
+        var datosMap = {};
+        for (var i = 0; i < radarData.length; i++) {
+            var tk = String(radarData[i][0] || "").trim().toUpperCase();
+            if (!tk || tk === "TICKER") continue;
+            datosMap[tk] = {
+                empresa: radarData[i][1] || "",
+                sector: radarData[i][2] || "",
+                score: parseFloat(radarData[i][13]) || 0,
+                entrada: radarData[i][14] || "",
+                stop: radarData[i][15] || "",
+                target: radarData[i][16] || "",
+                rr: radarData[i][17] || "",
+                hasSetup: !!(radarData[i][14] || radarData[i][15] || radarData[i][16] || radarData[i][17])
+            };
+        }
+
+        if (Object.keys(datosMap).length === 0) {
+            ss.toast("Radar Semanal sin tickers válidos. Generá el Radar primero.", "⚠️ Tracker", 6);
+            return;
+        }
+
         var cargados = 0;
 
         for (var r = 0; r < valores.length; r++) {
@@ -141,46 +167,45 @@ function onEditTrackerV4(e) {
                 if (!ticker) continue;
 
                 var row = range.getRow() + r;
-                var found = false;
+                var d = datosMap[ticker];
 
-                for (var i = 0; i < radarData.length; i++) {
-                    if (String(radarData[i][0]).trim().toUpperCase() === ticker) {
-                        var d = radarData[i];
-                        sheet.getRange(row, 2).setValue(d[1] || "");
-                        sheet.getRange(row, 3).setValue(d[2] || "");
-                        sheet.getRange(row, 4).setValue(d[13]).setNumberFormat("0.0");
-                        sheet.getRange(row, 6).setValue(d[14]).setNumberFormat('"$"#,##0.00');
-                        sheet.getRange(row, 7).setValue(d[15]).setNumberFormat('"$"#,##0.00');
-                        sheet.getRange(row, 8).setValue(d[16]).setNumberFormat('"$"#,##0.00');
-                        sheet.getRange(row, 9).setValue(d[17]).setNumberFormat("0.00x");
-
-                        var scCell = sheet.getRange(row, 4);
-                        if (d[13] >= UMBRAL_ALTA_CONF) {
-                            scCell.setFontColor(C4.GREEN).setBackground("#1B5E20").setFontWeight("bold");
-                        } else if (d[13] >= UMBRAL_MEDIA_CONF) {
-                            scCell.setFontColor(C4.ORANGE).setBackground("#FFF3E0").setFontWeight("bold");
-                        } else {
-                            scCell.setFontColor(C4.GRAY).setBackground(C4.LIGHT).setFontWeight("bold");
-                        }
-
-                        sheet.getRange(row, 5).setDataValidation(
-                            SpreadsheetApp.newDataValidation().requireCheckbox().build()
-                        ).setHorizontalAlignment("center");
-
-                        cargados++;
-                        found = true;
-                        break;
-                    }
+                if (!d) {
+                    ss.toast(ticker + " NO encontrado en Radar Semanal. Verificá el ticker o regenerá el Radar.", "⚠️ Tracker", 4);
+                    continue;
                 }
 
-                if (!found) {
-                    ss.toast(ticker + " NO encontrado en Radar. Verificá el ticker.", "⚠️ Tracker", 3);
+                sheet.getRange(row, 2).setValue(d.empresa);
+                sheet.getRange(row, 3).setValue(d.sector);
+                sheet.getRange(row, 4).setValue(d.score).setNumberFormat("0.0");
+
+                if (d.hasSetup) {
+                    sheet.getRange(row, 6).setValue(d.entrada).setNumberFormat('"$"#,##0.00');
+                    sheet.getRange(row, 7).setValue(d.stop).setNumberFormat('"$"#,##0.00');
+                    sheet.getRange(row, 8).setValue(d.target).setNumberFormat('"$"#,##0.00');
+                    sheet.getRange(row, 9).setValue(d.rr).setNumberFormat("0.00x");
+                } else {
+                    sheet.getRange(row, 6, 1, 4).clearContent();
                 }
+
+                var scCell = sheet.getRange(row, 4);
+                if (d.score >= UMBRAL_ALTA_CONF) {
+                    scCell.setFontColor(C4.GREEN).setBackground("#1B5E20").setFontWeight("bold");
+                } else if (d.score >= UMBRAL_MEDIA_CONF) {
+                    scCell.setFontColor(C4.ORANGE).setBackground("#FFF3E0").setFontWeight("bold");
+                } else {
+                    scCell.setFontColor(C4.GRAY).setBackground(C4.LIGHT).setFontWeight("bold");
+                }
+
+                sheet.getRange(row, 5).setDataValidation(
+                    SpreadsheetApp.newDataValidation().requireCheckbox().build()
+                ).setHorizontalAlignment("center");
+
+                cargados++;
             }
         }
 
         if (cargados > 0) {
-            ss.toast(cargados + " ticker(s) cargado(s) desde Radar ✅", "V4 Tracker", 3);
+            ss.toast(cargados + " ticker(s) cargado(s) desde 🎯 Radar Semanal ✅", "V4 Tracker", 4);
         }
     } catch (err) {
         ss.toast("ERROR en Tracker: " + err.message + " — Revisá el menú > Ver > Registros", "❌ Tracker", 8);
